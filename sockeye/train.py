@@ -92,6 +92,14 @@ def check_arg_compatibility(args: argparse.Namespace):
     if args.use_fused_rnn:
         check_condition(not args.use_cpu, "GPU required for FusedRNN cells")
 
+    #####
+    # GCN
+    if args.use_gcn:
+        assert args.source_graph is not None, "GCN needs graph inputs for training"
+        assert args.val_source_graph is not None, "GCN needs graph inputs for validation"
+
+    #####
+
     check_condition(args.optimized_metric == C.BLEU or args.optimized_metric in args.metrics,
                     "Must optimize either BLEU or one of tracked metrics (--metrics)")
 
