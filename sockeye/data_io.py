@@ -102,22 +102,28 @@ def get_bucket(seq_len: int, buckets: List[int]) -> Optional[int]:
 
 def read_parallel_corpus(data_source: str,
                          data_target: str,
+                         data_source_graph: str,
                          vocab_source: Dict[str, int],
                          vocab_target: Dict[str, int]) -> Tuple[List[List[int]], List[List[int]]]:
     """
     Loads source and target data, making sure they have the same length.
+    # TODO: fix return type
 
     :param data_source: Path to source training data.
     :param data_target: Path to target training data.
+    :param data_source_graph: Path to graphs for source training data.
     :param vocab_source: Source vocabulary.
     :param vocab_target: Target vocabulary.
     :return: Tuple of (source sentences, target sentences).
     """
     source_sentences = read_sentences(data_source, vocab_source, add_bos=False)
+    source_graphs = read_graphs(data_source_graph)
     target_sentences = read_sentences(data_target, vocab_target, add_bos=True)
     check_condition(len(source_sentences) == len(target_sentences),
                     "Number of source sentences does not match number of target sentences")
-    return source_sentences, target_sentences
+    check_condition(len(source_sentences) == len(source_graphs),
+                    "Number of source sentences does not match number of source graphs")
+    return source_sentences, target_sentences, source_graphs
 
 
 def length_statistics(source_sentences: List[List[Any]], target_sentences: List[List[int]]) -> Tuple[float, float]:
@@ -136,6 +142,7 @@ def length_statistics(source_sentences: List[List[Any]], target_sentences: List[
 
 def get_training_data_iters(source: str, target: str,
                             validation_source: str, validation_target: str,
+                            source_graph: str, val_source_graph: str,
                             vocab_source: Dict[str, int], vocab_target: Dict[str, int],
                             vocab_source_path: Optional[str], vocab_target_path: Optional[str],
                             batch_size: int,
@@ -155,6 +162,8 @@ def get_training_data_iters(source: str, target: str,
     :param target: Path to target training data.
     :param validation_source: Path to source validation data.
     :param validation_target: Path to target validation data.
+    :param source_graph: Path to graphs for source training data.
+    :param val_source_graph: Path to graphs for source validation data.
     :param vocab_source: Source vocabulary.
     :param vocab_target: Target vocabulary.
     :param vocab_source_path: Path to source vocabulary.
@@ -170,10 +179,14 @@ def get_training_data_iters(source: str, target: str,
     :return: Tuple of (training data iterator, validation data iterator, data config).
     """
     logger.info("Creating train data iterator")
-    train_source_sentences, train_target_sentences = read_parallel_corpus(source,
-                                                                          target,
-                                                                          vocab_source,
-                                                                          vocab_target)
+
+    (train_source_sentences,
+     train_target_sentences,
+     train_source_graphs) = read_parallel_corpus(source,
+                                                 target,
+                                                 source_graph,
+                                                 vocab_source,
+                                                 vocab_target)
 
     max_observed_source_len = max((len(s) for s in train_source_sentences if len(s) <= max_seq_len_source), default=0)
     max_observed_target_len = max((len(t) for t in train_target_sentences if len(t) <= max_seq_len_target), default=0)
@@ -201,10 +214,13 @@ def get_training_data_iters(source: str, target: str,
                                             fill_up=fill_up)
 
     logger.info("Creating validation data iterator")
-    val_source_sentences, val_target_sentences = read_parallel_corpus(validation_source,
-                                                                      validation_target,
-                                                                      vocab_source,
-                                                                      vocab_target)
+    
+    (val_source_sentences,
+     val_target_sentences,
+     val_source_graphs) = read_parallel_corpus(validation_source,
+                                               validation_target,
+                                               vocab_source,
+                                               vocab_target)
     val_iter = ParallelBucketSentenceIter(val_source_sentences,
                                           val_target_sentences,
                                           buckets,
@@ -219,10 +235,19 @@ def get_training_data_iters(source: str, target: str,
 
     config_data = DataConfig(source, target,
                              validation_source, validation_target,
+                             source_graph, val_source_graph,
                              vocab_source_path, vocab_target_path,
                              lr_mean, lr_std, max_observed_source_len, max_observed_target_len)
 
     return train_iter, val_iter, config_data
+
+#train_iter = get_data_iter(source, target, source_graph, vocab_source, vocab_target, batch_size, fill_up,
+#                               max_seq_len, bucketing, bucket_width=bucket_width)
+#    logger.info("Creating validation data iterator")
+#    eval_iter = get_data_iter(validation_source, validation_target, val_source_graph, vocab_source, vocab_target, batch_size, fill_up,
+#                              max_seq_len, bucketing, bucket_width=bucket_width)
+#    return train_iter, eval_iter
+
 
 
 class DataConfig(config.Config):
@@ -234,6 +259,8 @@ class DataConfig(config.Config):
                  target: str,
                  validation_source: str,
                  validation_target: str,
+                 source_graph: str,
+                 val_source_graph: str,
                  vocab_source: Optional[str],
                  vocab_target: Optional[str],
                  length_ratio_mean: float = C.TARGET_MAX_LENGTH_FACTOR,
@@ -245,6 +272,8 @@ class DataConfig(config.Config):
         self.target = target
         self.validation_source = validation_source
         self.validation_target = validation_target
+        self.source_graph = source_graph
+        self.val_source_graph = val_source_graph
         self.vocab_source = vocab_source
         self.vocab_target = vocab_target
         self.length_ratio_mean = length_ratio_mean
@@ -377,6 +406,38 @@ BucketBatchSize = NamedTuple("BucketBatchSize", [
 :param average_words_per_batch: Approximate number of non-padding tokens in each batch.
 """
 
+
+def read_graphs(path: str, limit=None): #TODO: add return type
+    """
+    Reads graphs from path, creating a list of tuples for each sentence.
+    We assume the format for graphs uses whitespace as separator.
+    This allows us to reuse the reading methods for the sentences.
+
+    TODO: we are ignoring the edge type for now.
+
+    :param path: Path to read data from.
+    :return: List of sequences of integer tuples.
+    """
+    graphs = []
+    for graph_tokens in read_content(path, limit):
+        graph = process_edges(graph_tokens)
+        assert len(graph) > 0, "Empty graph in file %s" % path
+        graphs.append(graph)
+    logger.info("%d graphs loaded from '%s'", len(graphs), path)
+    return graphs
+
+
+def process_edges(graph_tokens: Iterable[str]): #TODO: add typing
+    """
+    Returns sequence of int tuples given a sequence of graph edges.
+    
+    TODO: this can be more efficient...
+
+    :param graph_tokens: List of tokens containing graph edges.
+    :return: List of (int, int) tuples
+    """
+    return [(int(tok.split(',')[0]), int(tok.split(',')[1])) for tok in graph_tokens]
+    
 
 # TODO: consider more memory-efficient data reading (load from disk on demand)
 # TODO: consider using HDF5 format for language data

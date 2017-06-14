@@ -622,6 +622,7 @@ def main():
         vocab_source_size = len(vocab_source)
         vocab_target_size = len(vocab_target)
         logger.info("Vocabulary sizes: source=%d target=%d", vocab_source_size, vocab_target_size)
+
         train_iter, eval_iter, config_data = create_data_iters(args, vocab_source, vocab_target)
         lr_scheduler_instance = create_lr_scheduler(args, resume_training, training_state_dir)
 
@@ -676,6 +677,7 @@ def main():
                            mxmonitor_stat_func=args.monitor_stat_func,
                            lr_decay_param_reset=args.learning_rate_decay_param_reset,
                            lr_decay_opt_states_reset=args.learning_rate_decay_optimizer_states_reset)
+
 
 
 if __name__ == "__main__":
