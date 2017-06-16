@@ -679,6 +679,5 @@ def main():
                            lr_decay_opt_states_reset=args.learning_rate_decay_optimizer_states_reset)
 
 
-
 if __name__ == "__main__":
     main()
