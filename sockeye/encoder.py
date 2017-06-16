@@ -40,6 +40,8 @@ def get_encoder(config: Config, fused: bool, embed_weight: Optional[mx.sym.Symbo
         return get_transformer_encoder(config, embed_weight)
     elif isinstance(config, ConvolutionalEncoderConfig):
         return get_convolutional_encoder(config, embed_weight)
+    elif isinstance(config, GraphConvEncoderConfig):
+        return get_gcn_encoder(config, embed_weight)
     else:
         raise ValueError("Unsupported encoder configuration")
 
@@ -101,7 +103,33 @@ class ConvolutionalEncoderConfig(Config):
         self.max_seq_len_source = max_seq_len_source
         self.positional_embedding_type = positional_embedding_type
 
+        
+class GraphConvEncoderConfig(Config):
+    """
+    Graph Convolutional encoder configuration.
 
+    :param vocab_size: Source vocabulary size.
+    :param num_embed: Size of embedding layer.
+    :param embed_dropout: Dropout probability on embedding layer.
+    :param gcn_config: GCN configuration.
+    :param num_layers: The number of layers on top of the embeddings.
+    """
+    def __init__(self,
+                 vocab_size: int,
+                 num_embed: int,
+                 embed_dropout: float,
+                 max_seq_len_source: int,
+                 gcn_config: gcn.GraphConvConfig,
+                 num_layers: int) -> None:
+        super().__init__()
+        self.vocab_size = vocab_size
+        self.num_embed = num_embed
+        self.embed_dropout = embed_dropout
+        self.num_layers = num_layers
+        self.gcn_config = gcn_config
+        self.max_seq_len_source = max_seq_len_source
+
+    
 def get_recurrent_encoder(config: RecurrentEncoderConfig, fused: bool,
                           embed_weight: Optional[mx.sym.Symbol] = None) -> 'Encoder':
     """
@@ -208,6 +236,28 @@ def get_transformer_encoder(config: transformer.TransformerConfig,
         encoders.append(ConvolutionalEmbeddingEncoder(config.conv_config))
 
     encoders.append(TransformerEncoder(config))
+    encoders.append(BatchMajor2TimeMajor())
+
+    return EncoderSequence(encoders)
+
+
+def get_gcn_encoder(config: GraphConvEncoderConfig,
+                    embed_weight: Optional[mx.sym.Symbol] = None) -> 'Encoder':
+    """
+    Creates a graph convolutional encoder.
+
+    :param config: Configuration for graph convolutional encoder.
+    :param embed_weight: Optionally use an existing embedding matrix instead of creating a new one.
+    :return: Encoder instance.
+    """
+    encoders = list()  # type: List[Encoder]
+    encoders.append(Embedding(num_embed=config.num_embed,
+                              vocab_size=config.vocab_size,
+                              prefix=C.SOURCE_EMBEDDING_PREFIX,
+                              dropout=config.embed_dropout,
+                              embed_weight=embed_weight))
+
+    encoders.append(GraphConvEncoder(config=config))
     encoders.append(BatchMajor2TimeMajor())
 
     return EncoderSequence(encoders)
@@ -1089,7 +1139,20 @@ class GraphConvEncoder(Encoder):
         """
         adj = metadata
         #outputs = self.gcn.convolve(data, adj)
-        print(adj)
+        #print(adj)
+        logger.info("I am here!")
+        logger.info(str(adj))
         outputs = data
         return outputs
 
+    def get_num_hidden(self) -> int:
+        """
+        Return the representation size of this encoder.
+        """
+        return 0
+
+    def get_rnn_cells(self) -> List[mx.rnn.BaseRNNCell]:
+        """
+        Returns a list of RNNCells used by this encoder.
+        """
+        return []

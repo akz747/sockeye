@@ -438,7 +438,7 @@ def process_edges(graph_tokens: Iterable[str]): #TODO: add typing
     :param graph_tokens: List of tokens containing graph edges.
     :return: List of (int, int) tuples
     """
-    return [(int(tok.split(',')[0]), int(tok.split(',')[1])) for tok in graph_tokens]
+    return [(int(tok[1:-1].split(',')[0]), int(tok[1:-1].split(',')[1])) for tok in graph_tokens]
     
 
 # TODO: consider more memory-efficient data reading (load from disk on demand)
@@ -480,6 +480,7 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
                  fill_up: Optional[str] = None,
                  source_data_name=C.SOURCE_NAME,
                  target_data_name=C.TARGET_NAME,
+                 src_graph_name=C.SRC_GRAPH_NAME,
                  label_name=C.TARGET_LABEL_NAME,
                  dtype='float32') -> None:
         super(ParallelBucketSentenceIter, self).__init__()
@@ -496,6 +497,7 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
         self.dtype = dtype
         self.source_data_name = source_data_name
         self.target_data_name = target_data_name
+        self.src_graph_name = src_graph_name
         self.label_name = label_name
         self.fill_up = fill_up
 
@@ -529,13 +531,17 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
                            layout=C.BATCH_MAJOR),
             mx.io.DataDesc(name=target_data_name,
                            shape=(self.bucket_batch_sizes[-1].batch_size, self.default_bucket_key[1]),
+                           layout=C.BATCH_MAJOR),
+            mx.io.DataDesc(name=src_graph_name,
+                           shape=(batch_size, self.default_bucket_key[1]*10, 2),
                            layout=C.BATCH_MAJOR)]
+
         self.provide_label = [
             mx.io.DataDesc(name=label_name,
                            shape=(self.bucket_batch_sizes[-1].batch_size, self.default_bucket_key[1]),
                            layout=C.BATCH_MAJOR)]
 
-        self.data_names = [self.source_data_name, self.target_data_name]
+        self.data_names = [self.source_data_name, self.target_data_name, self.src_graph_name]
         self.label_names = [self.label_name]
 
         # create index tuples (i,j) into buckets: i := bucket index ; j := row index of bucket array
@@ -557,7 +563,7 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
 
         #####
         # GCN
-        self.nd_src_graph = []
+        self.nd_src_graphs = []
 
         self.reset()
 
@@ -701,7 +707,9 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
             self.data_label[i] = np.asarray(self.data_label[i], dtype=self.dtype)
             #####
             # GCN
-            self.data_src_graphs[i] = np.asarray(self.data_src_graphs[i], dtype=self.dtype)
+            print(self.data_src_graphs[i])
+            self.data_src_graphs[i] = np.asarray([np.asarray(row) for row in self.data_src_graphs[i]])#, dtype=self.dtype)
+            print(self.data_src_graphs[i])
             #####
 
             
@@ -724,9 +732,11 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
                                                         axis=0)
                     ####
                     # GCN: we add an empty list as padding
-                    self.data_src_graph = np.concatenate((self.data_src_graph[i], self.data_src_graph[i][random_indices, :]),
+                    self.data_src_graphs[i] = np.concatenate((self.data_src_graphs[i], self.data_src_graphs[i][random_indices]),
                                                          axis=0)
                     ####
+                    print(self.data_source[i])
+                    print(self.data_src_graphs[i])
                     
 
     def reset(self):
@@ -742,7 +752,7 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
         self.nd_label = []
         #####
         # GCN
-        self.nd_src_graph = []
+        self.nd_src_graphs = []
         #####
 
         self.indices = []
@@ -762,7 +772,7 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
         self.nd_source.append(mx.nd.array(self.data_source[bucket].take(shuffled_indices, axis=0), dtype=self.dtype))
         self.nd_target.append(mx.nd.array(self.data_target[bucket].take(shuffled_indices, axis=0), dtype=self.dtype))
         self.nd_label.append(mx.nd.array(self.data_label[bucket].take(shuffled_indices, axis=0), dtype=self.dtype))
-        self.nd_src_graph.append(mx.nd.array(self.data_src_graph[bucket].take(shuffled_indices, axis=0), dtype=self.dtype))           
+        self.nd_src_graphs.append(mx.nd.array(self.data_src_graph[bucket].take(shuffled_indices, axis=0), dtype=self.dtype))           
 
     def iter_next(self) -> bool:
         """
