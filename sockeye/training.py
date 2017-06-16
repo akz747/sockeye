@@ -97,6 +97,8 @@ class TrainingModel(model.SockeyeModel):
         utils.check_condition(train_iter.pad_id == C.PAD_ID == 0, "pad id should be 0")
         source = mx.sym.Variable(C.SOURCE_NAME)
         source_length = utils.compute_lengths(source)
+        src_graph = mx.sym.Variable(C.SRC_GRAPH_NAME)
+
         target = mx.sym.Variable(C.TARGET_NAME)
         target_length = utils.compute_lengths(target)
         labels = mx.sym.reshape(data=mx.sym.Variable(C.TARGET_LABEL_NAME), shape=(-1,))
@@ -115,7 +117,9 @@ class TrainingModel(model.SockeyeModel):
 
             (source_encoded,
              source_encoded_length,
-             source_encoded_seq_len) = self.encoder.encode(source, source_length, seq_len=source_seq_len)
+             source_encoded_seq_len) = self.encoder.encode(source, source_length,
+                                                           seq_len=source_seq_len,
+                                                           metadata=src_graph)
 
             source_lexicon = self.lexicon.lookup(source) if self.lexicon else None
 

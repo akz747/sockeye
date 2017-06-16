@@ -222,13 +222,15 @@ class Encoder(ABC):
     def encode(self,
                data: mx.sym.Symbol,
                data_length: mx.sym.Symbol,
-               seq_len: int) -> Tuple[mx.sym.Symbol, mx.sym.Symbol, int]:
+               seq_len: int,
+               metadata=None) -> Tuple[mx.sym.Symbol, mx.sym.Symbol, int]:
         """
         Encodes data given sequence lengths of individual examples and maximum sequence length.
 
         :param data: Input data.
         :param data_length: Vector with sequence lengths.
         :param seq_len: Maximum sequence length.
+        :param metadata: Optional metadata that can be used in more complex encoders.
         :return: Encoded versions of input data (data, data_length, seq_len).
         """
         pass
@@ -544,17 +546,20 @@ class EncoderSequence(Encoder):
     def encode(self,
                data: mx.sym.Symbol,
                data_length: mx.sym.Symbol,
-               seq_len: int) -> Tuple[mx.sym.Symbol, mx.sym.Symbol, int]:
+               seq_len: int,
+               metadata=None) -> Tuple[mx.sym.Symbol, mx.sym.Symbol, int]:
         """
         Encodes data given sequence lengths of individual examples and maximum sequence length.
 
         :param data: Input data.
         :param data_length: Vector with sequence lengths.
         :param seq_len: Maximum sequence length.
+        :param metadata: Optional metadata that can be used in more complex encoders.
         :return: Encoded versions of input data (data, data_length, seq_len).
         """
         for encoder in self.encoders:
-            data, data_length, seq_len = encoder.encode(data, data_length, seq_len)
+            data, data_length, seq_len = encoder.encode(data, data_length, seq_len,
+                                                        metadata=metadata)
         return data, data_length, seq_len
 
     def get_num_hidden(self) -> int:
@@ -1075,13 +1080,16 @@ class GraphConvEncoder(Encoder):
                  fused: bool = False):
         self.layout = layout
         self.fused = fused
-        self.gcn = sockeye.gcn.get_gcn(prefix)
+        #self.gcn = sockeye.gcn.get_gcn(prefix)
 
-    def encode(self, data: mx.sym.Symbol, adj:mx.sym.Symbol,
-               data_length: mx.sym.Symbol, seq_len: int):
+    def encode(self, data: mx.sym.Symbol, 
+               data_length: mx.sym.Symbol, seq_len: int, metadata=None):
         """
         Convolve data using adj and the GCN parameters
         """
-        outputs = self.gcn.convolve(data, adj)
+        adj = metadata
+        #outputs = self.gcn.convolve(data, adj)
+        print(adj)
+        outputs = data
         return outputs
 

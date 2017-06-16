@@ -135,6 +135,7 @@ CNN_PAD_CENTERED = "centered"
 # default I/O variable names
 SOURCE_NAME = "source"
 SOURCE_LENGTH_NAME = "source_length"
+SRC_GRAPH_NAME = "src_graph"
 TARGET_NAME = "target"
 TARGET_LABEL_NAME = "target_label"
 LEXICON_NAME = "lexicon"
