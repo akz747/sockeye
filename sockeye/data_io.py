@@ -468,7 +468,7 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
     def __init__(self,
                  source_sentences: List[List[int]],
                  target_sentences: List[List[int]],
-                 source_graphs: List[Tuple[int, int]],
+                 source_metadata: List[Tuple[int, int]],
                  buckets: List[Tuple[int, int]],
                  batch_size: int,
                  batch_by_words: bool,
@@ -480,7 +480,7 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
                  fill_up: Optional[str] = None,
                  source_data_name=C.SOURCE_NAME,
                  target_data_name=C.TARGET_NAME,
-                 src_graph_name=C.SRC_GRAPH_NAME,
+                 src_metadata_name=C.SOURCE_METADATA_NAME,
                  label_name=C.TARGET_LABEL_NAME,
                  dtype='float32') -> None:
         super(ParallelBucketSentenceIter, self).__init__()
@@ -497,7 +497,7 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
         self.dtype = dtype
         self.source_data_name = source_data_name
         self.target_data_name = target_data_name
-        self.src_graph_name = src_graph_name
+        self.src_metadata_name = src_metadata_name
         self.label_name = label_name
         self.fill_up = fill_up
 
@@ -513,7 +513,7 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
         self.bucket_batch_sizes = bucket_batch_sizes
 
         # assign sentence pairs to buckets
-        self._assign_to_buckets(source_sentences, target_sentences, source_graphs)
+        self._assign_to_buckets(source_sentences, target_sentences, source_metadata)
 
         # convert to single numpy array for each bucket
         self._convert_to_array()
@@ -563,7 +563,7 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
 
         #####
         # GCN
-        self.nd_src_graphs = []
+        self.nd_src_metadata = []
 
         self.reset()
 
@@ -610,7 +610,7 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
             self.data_label_average_len[buck_idx] += len(target)
             #####
             # GCN
-            self.data_src_graphs[buck_idx].append(src_graph)
+            self.data_src_metadata[buck_idx].append(src_meta)
             #####
 
         # Average number of non-padding elements in target sequence per bucket
@@ -707,9 +707,9 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
             self.data_label[i] = np.asarray(self.data_label[i], dtype=self.dtype)
             #####
             # GCN
-            print(self.data_src_graphs[i])
-            self.data_src_graphs[i] = np.asarray([np.asarray(row) for row in self.data_src_graphs[i]])#, dtype=self.dtype)
-            print(self.data_src_graphs[i])
+            print(self.data_src_metadata[i])
+            self.data_src_metadata[i] = np.asarray([np.asarray(row) for row in self.data_src_metadata[i]])#, dtype=self.dtype)
+            print(self.data_src_metadata[i])
             #####
 
             
@@ -732,11 +732,11 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
                                                         axis=0)
                     ####
                     # GCN: we add an empty list as padding
-                    self.data_src_graphs[i] = np.concatenate((self.data_src_graphs[i], self.data_src_graphs[i][random_indices]),
+                    self.data_src_metadata[i] = np.concatenate((self.data_src_metadata[i], self.data_src_metadata[i][random_indices]),
                                                          axis=0)
                     ####
                     print(self.data_source[i])
-                    print(self.data_src_graphs[i])
+                    print(self.data_src_metadata[i])
                     
 
     def reset(self):
@@ -752,9 +752,8 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
         self.nd_label = []
         #####
         # GCN
-        self.nd_src_graphs = []
+        self.nd_src_metadata = []
         #####
-
         self.indices = []
         for i in range(len(self.data_source)):
             # shuffle indices within each bucket
