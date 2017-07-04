@@ -95,8 +95,8 @@ def check_arg_compatibility(args: argparse.Namespace):
     #####
     # GCN
     if args.use_gcn:
-        assert args.source_graph is not None, "GCN needs graph inputs for training"
-        assert args.val_source_graph is not None, "GCN needs graph inputs for validation"
+        assert args.source_metadata is not None, "GCN needs graph inputs for training"
+        assert args.val_source_metadata is not None, "GCN needs graph inputs for validation"
 
     #####
 

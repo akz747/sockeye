@@ -117,7 +117,7 @@ def read_parallel_corpus(data_source: str,
     :return: Tuple of (source sentences, target sentences).
     """
     source_sentences = read_sentences(data_source, vocab_source, add_bos=False)
-    source_graphs = read_graphs(data_source_graph)
+    source_metadata = read_metadata(data_source_metadata)
     target_sentences = read_sentences(data_target, vocab_target, add_bos=True)
     check_condition(len(source_sentences) == len(target_sentences),
                     "Number of source sentences does not match number of target sentences")
@@ -142,7 +142,7 @@ def length_statistics(source_sentences: List[List[Any]], target_sentences: List[
 
 def get_training_data_iters(source: str, target: str,
                             validation_source: str, validation_target: str,
-                            source_graph: str, val_source_graph: str,
+                            source_metadata: str, val_source_metadata: str,
                             vocab_source: Dict[str, int], vocab_target: Dict[str, int],
                             vocab_source_path: Optional[str], vocab_target_path: Optional[str],
                             batch_size: int,
@@ -162,8 +162,8 @@ def get_training_data_iters(source: str, target: str,
     :param target: Path to target training data.
     :param validation_source: Path to source validation data.
     :param validation_target: Path to target validation data.
-    :param source_graph: Path to graphs for source training data.
-    :param val_source_graph: Path to graphs for source validation data.
+    :param source_metadata: Path to source training metadata.
+    :param val_source_metadata: Path to source validation metadata.
     :param vocab_source: Source vocabulary.
     :param vocab_target: Target vocabulary.
     :param vocab_source_path: Path to source vocabulary.
@@ -411,8 +411,8 @@ BucketBatchSize = NamedTuple("BucketBatchSize", [
 
 def read_graphs(path: str, limit=None): #TODO: add return type
     """
-    Reads graphs from path, creating a list of tuples for each sentence.
-    We assume the format for graphs uses whitespace as separator.
+    Reads metadata from path, creating a list of tuples for each sentence.
+    We assume the format for metadata uses whitespace as separator.
     This allows us to reuse the reading methods for the sentences.
 
     TODO: we are ignoring the edge type for now.
