@@ -260,6 +260,7 @@ def get_gcn_encoder(config: GraphConvEncoderConfig,
     encoders.append(GraphConvEncoder(config=config))
     encoders.append(BatchMajor2TimeMajor())
 
+    logger.info(encoders)    
     return EncoderSequence(encoders)
 
 
@@ -382,6 +383,7 @@ class Embedding(Encoder):
         :param seq_len: Maximum sequence length.
         :return: Encoded versions of input data (data, data_length, seq_len).
         """
+        logger.info(str(data))
         embedding = mx.sym.Embedding(data=data,
                                      input_dim=self.vocab_size,
                                      weight=self.embed_weight,
@@ -1142,6 +1144,7 @@ class GraphConvEncoder(Encoder):
         #print(adj)
         logger.info("I am here!")
         logger.info(str(adj))
+        logger.info(str(data))
         outputs = data
         return outputs
 
