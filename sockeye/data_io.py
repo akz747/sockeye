@@ -735,11 +735,12 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
                                                         axis=0)
                     ####
                     # GCN: we add an empty list as padding
-                    self.data_src_metadata[i] = np.concatenate((self.data_src_metadata[i], self.data_src_metadata[i][random_indices]),
+                    self.data_src_metadata[i] = np.concatenate((self.data_src_metadata[i], self.data_src_metadata[i][random_indices, :, :]),
                                                          axis=0)
                     ####
-                    print(self.data_source[i])
-                    print(self.data_src_metadata[i])
+                    logger.info('Shapes after replication')
+                    logger.info(self.data_source[i].shape)
+                    logger.info(self.data_src_metadata[i].shape)
                     
     def _convert_to_adj_matrix(self, bucket_size, data_src_metadata):
         """
@@ -750,6 +751,7 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
         batch_size = len(data_src_metadata)
         #new_src_metadata = np.zeroes((batch_size, bucket_size, bucket_size))
         new_src_metadata = np.array([np.eye(bucket_size) for sent in range(batch_size)])
+        logger.info(new_src_metadata.shape)
         for i, graph in enumerate(data_src_metadata):
             for tup in graph:
                 new_src_metadata[i][tup[0]][tup[1]] = 1.0
