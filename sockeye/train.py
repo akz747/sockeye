@@ -623,6 +623,16 @@ def main():
         vocab_target_size = len(vocab_target)
         logger.info("Vocabulary sizes: source=%d target=%d", vocab_source_size, vocab_target_size)
 
+        ###########
+        # GCN
+        # For now we assume graph vocab is built externally
+        assert args.metadata_vocab is not None, "You need to provide graph edges vocab as a JSON file"
+        vocab_metadata = _build_or_load_vocab(args.metadata_vocab, args.source_metadata, args.num_words, args.word_min_count)
+        sockeye.vocab.vocab_to_json(vocab_metadata, os.path.join(output_folder, C.VOCAB_MD_NAME) + C.JSON_SUFFIX)
+        vocab_metadata_size = len(vocab_metadata)
+        ###########
+
+        
         train_iter, eval_iter, config_data = create_data_iters(args, vocab_source, vocab_target)
         lr_scheduler_instance = create_lr_scheduler(args, resume_training, training_state_dir)
 
