@@ -632,8 +632,8 @@ def main():
         vocab_metadata_size = len(vocab_metadata)
         ###########
 
-        
-        train_iter, eval_iter, config_data = create_data_iters(args, vocab_source, vocab_target)
+        train_iter, eval_iter, config_data = create_data_iters(args, vocab_source, vocab_target,
+                                                               vocab_metadata)
         lr_scheduler_instance = create_lr_scheduler(args, resume_training, training_state_dir)
 
         model_config = create_model_config(args, vocab_source_size, vocab_target_size, config_data)
@@ -687,6 +687,7 @@ def main():
                            mxmonitor_stat_func=args.monitor_stat_func,
                            lr_decay_param_reset=args.learning_rate_decay_param_reset,
                            lr_decay_opt_states_reset=args.learning_rate_decay_optimizer_states_reset)
+
 
 
 if __name__ == "__main__":

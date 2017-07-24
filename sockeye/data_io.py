@@ -104,7 +104,9 @@ def read_parallel_corpus(data_source: str,
                          data_target: str,
                          data_source_graph: str,
                          vocab_source: Dict[str, int],
-                         vocab_target: Dict[str, int]) -> Tuple[List[List[int]], List[List[int]]]:
+                         vocab_target: Dict[str, int],
+                         vocab_metadata: Dict[str, int]) -> Tuple[List[List[int]], List[List[int]]]:
+
     """
     Loads source and target data, making sure they have the same length.
     # TODO: fix return type
@@ -114,10 +116,11 @@ def read_parallel_corpus(data_source: str,
     :param data_source_graph: Path to graphs for source training data.
     :param vocab_source: Source vocabulary.
     :param vocab_target: Target vocabulary.
+    :param vocab_metadata: Metadata vocabulary.
     :return: Tuple of (source sentences, target sentences).
     """
     source_sentences = read_sentences(data_source, vocab_source, add_bos=False)
-    source_metadata = read_metadata(data_source_metadata)
+    source_metadata = read_metadata(data_source_metadata, vocab_metadata)
     target_sentences = read_sentences(data_target, vocab_target, add_bos=True)
     check_condition(len(source_sentences) == len(target_sentences),
                     "Number of source sentences does not match number of target sentences")
@@ -143,8 +146,12 @@ def length_statistics(source_sentences: List[List[Any]], target_sentences: List[
 def get_training_data_iters(source: str, target: str,
                             validation_source: str, validation_target: str,
                             source_metadata: str, val_source_metadata: str,
-                            vocab_source: Dict[str, int], vocab_target: Dict[str, int],
-                            vocab_source_path: Optional[str], vocab_target_path: Optional[str],
+                            vocab_source: Dict[str, int],
+                            vocab_target: Dict[str, int],
+                            vocab_metadata: Dict[str, int],
+                            vocab_source_path: Optional[str],
+                            vocab_target_path: Optional[str],
+                            vocab_metadata_path: Optional[str],
                             batch_size: int,
                             batch_by_words: bool,
                             batch_num_devices: int,
@@ -166,8 +173,10 @@ def get_training_data_iters(source: str, target: str,
     :param val_source_metadata: Path to source validation metadata.
     :param vocab_source: Source vocabulary.
     :param vocab_target: Target vocabulary.
+    :param vocab_metadata: Metadata vocabulary.
     :param vocab_source_path: Path to source vocabulary.
     :param vocab_target_path: Path to target vocabulary.
+    :param vocab_metadata_path: Path to metadata vocabulary.
     :param batch_size: Batch size.
     :param batch_by_words: Size batches by words rather than sentences.
     :param batch_num_devices: Number of devices batches will be parallelized across.
@@ -369,6 +378,7 @@ def read_sentences(path: str, vocab: Dict[str, int], add_bos=False, limit=None) 
     return sentences
 
 
+<<<<<<< f1e07a95fd589f20bca54a8292b4c8cd735cb66b
 def get_default_bucket_key(buckets: List[Tuple[int, int]]) -> Tuple[int, int]:
     """
     Returns the default bucket from a list of buckets, i.e. the largest bucket.
@@ -409,7 +419,7 @@ BucketBatchSize = NamedTuple("BucketBatchSize", [
 """
 
 
-def read_graphs(path: str, limit=None): #TODO: add return type
+def read_metadata(path: str, vocab: Dict[str, int], limit=None): #TODO: add return type
     """
     Reads metadata from path, creating a list of tuples for each sentence.
     We assume the format for metadata uses whitespace as separator.
@@ -422,14 +432,14 @@ def read_graphs(path: str, limit=None): #TODO: add return type
     """
     graphs = []
     for graph_tokens in read_content(path, limit):
-        graph = process_edges(graph_tokens)
+        graph = process_edges(graph_tokens, vocab)
         assert len(graph) > 0, "Empty graph in file %s" % path
         graphs.append(graph)
     logger.info("%d graphs loaded from '%s'", len(graphs), path)
     return graphs
 
 
-def process_edges(graph_tokens: Iterable[str]): #TODO: add typing
+def process_edges(graph_tokens: Iterable[str], vocab: Dict[str, int]): #TODO: add typing
     """
     Returns sequence of int tuples given a sequence of graph edges.
     
@@ -438,7 +448,9 @@ def process_edges(graph_tokens: Iterable[str]): #TODO: add typing
     :param graph_tokens: List of tokens containing graph edges.
     :return: List of (int, int) tuples
     """
-    adj_list = [(int(tok[1:-1].split(',')[0]), int(tok[1:-1].split(',')[1])) for tok in graph_tokens]
+    adj_list = [(int(tok[1:-1].split(',')[0]),
+                 int(tok[1:-1].split(',')[1]),
+                 vocab[tok[1:-1].split(',')[2]]) for tok in graph_tokens]
     return adj_list
     
 
@@ -457,6 +469,7 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
            Incomplete batches are discarded if fill_up == None, or filled up according to the fill_up strategy.
     :param batch_by_words: Size batches by words rather than sentences.
     :param batch_num_devices: Number of devices batches will be parallelized across.
+    :param md_vocab_size: Size of metadata vocabulary, needed for the adjacency tensors.
     :param fill_up: If not None, fill up bucket data to a multiple of batch_size to avoid discarding incomplete batches.
            for each bucket. If set to 'replicate', sample examples from the bucket and use them to fill up.
     :param eos_id: Word id for end-of-sentence.
@@ -474,6 +487,7 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
                  batch_size: int,
                  batch_by_words: bool,
                  batch_num_devices: int,
+                 md_vocab_size: int,
                  eos_id: int,
                  pad_id: int,
                  unk_id: int,
@@ -492,6 +506,7 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
         self.batch_size = batch_size
         self.batch_by_words = batch_by_words
         self.batch_num_devices = batch_num_devices
+        self.md_vocab_size = md_vocab_size
         self.eos_id = eos_id
         self.pad_id = pad_id
         self.unk_id = unk_id
@@ -750,12 +765,13 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
         """
         batch_size = len(data_src_metadata)
         #new_src_metadata = np.zeroes((batch_size, bucket_size, bucket_size))
-        new_src_metadata = np.array([np.zeros((bucket_size, bucket_size)) for sent in range(batch_size)])
+        new_src_metadata = np.array([np.zeros((self.md_vocab_size, bucket_size, bucket_size)) for sent in range(batch_size)])
         logger.info(new_src_metadata.shape)
         for i, graph in enumerate(data_src_metadata):
             for tup in graph:
-                new_src_metadata[i][tup[0]][tup[1]] = 1.0
-                new_src_metadata[i][tup[1]][tup[0]] = 1.0
+                new_src_metadata[i][tup[2]][tup[0]][tup[1]] = 1.0
+                # No need for this anymore, reverse edges are read from data
+                #new_src_metadata[i][tup[1]][tup[0]] = 1.0
         #self.data_src_metadata[i] = np.asarray([np.asarray(row) for row in self.data_src_metadata[i]])#, dtype=self.dtype)
         return new_src_metadata
         
