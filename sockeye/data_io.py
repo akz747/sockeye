@@ -482,7 +482,7 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
     def __init__(self,
                  source_sentences: List[List[int]],
                  target_sentences: List[List[int]],
-                 source_metadata: List[Tuple[int, int]],
+                 source_metadata: List[Tuple[int, int, str]],
                  buckets: List[Tuple[int, int]],
                  batch_size: int,
                  batch_by_words: bool,
@@ -750,7 +750,7 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
                                                         axis=0)
                     ####
                     # GCN: we add an empty list as padding
-                    self.data_src_metadata[i] = np.concatenate((self.data_src_metadata[i], self.data_src_metadata[i][random_indices, :, :]),
+                    self.data_src_metadata[i] = np.concatenate((self.data_src_metadata[i], self.data_src_metadata[i][random_indices, :, :, :]),
                                                          axis=0)
                     ####
                     logger.info('Shapes after replication')
@@ -773,6 +773,8 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
                 # No need for this anymore, reverse edges are read from data
                 #new_src_metadata[i][tup[1]][tup[0]] = 1.0
         #self.data_src_metadata[i] = np.asarray([np.asarray(row) for row in self.data_src_metadata[i]])#, dtype=self.dtype)
+        logger.info('adj tensors')
+        logger.info(new_src_metadata.shape)
         return new_src_metadata
         
     def reset(self):
