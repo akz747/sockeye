@@ -1129,13 +1129,15 @@ class GraphConvEncoder(Encoder):
     """
 
     def __init__(self,
-                 num_hidden: int=10,
+                 input_dim: int,
+                 output_dim: int,
+                 tensor_dim: int,
                  prefix: str = C.GCN_PREFIX,
                  layout: str = C.TIME_MAJOR,
                  fused: bool = False):
         self.layout = layout
         self.fused = fused
-        self.gcn = sockeye.gcn.get_gcn(num_hidden, prefix)
+        self.gcn = sockeye.gcn.get_gcn(input_dim, output_dim, tensor_dim, prefix)
 
     def encode(self, data: mx.sym.Symbol, 
                data_length: mx.sym.Symbol, seq_len: int, metadata=None):
