@@ -632,7 +632,6 @@ def main():
         vocab_edges_size = len(vocab_edges)
         ###########
 
-<<<<<<< 6bc3628762029409e89b58fc91c6dc1aa6e03ec7
         train_iter, eval_iter, config_data = create_data_iters(args, vocab_source, vocab_target,
                                                                vocab_metadata)
         lr_scheduler_instance = create_lr_scheduler(args, resume_training, training_state_dir)

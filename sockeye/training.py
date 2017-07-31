@@ -97,7 +97,7 @@ class TrainingModel(model.SockeyeModel):
         utils.check_condition(train_iter.pad_id == C.PAD_ID == 0, "pad id should be 0")
         source = mx.sym.Variable(C.SOURCE_NAME)
         source_length = utils.compute_lengths(source)
-        src_graph = mx.sym.Variable(C.SOURCE_METADATA_NAME)
+        source_graphs = mx.sym.Variable(C.SOURCE_GRAPHS_NAME)
         target = mx.sym.Variable(C.TARGET_NAME)
         target_length = utils.compute_lengths(target)
         labels = mx.sym.reshape(data=mx.sym.Variable(C.TARGET_LABEL_NAME), shape=(-1,))
