@@ -98,7 +98,9 @@ def check_arg_compatibility(args: argparse.Namespace):
         assert args.source_graphs is not None, "GCN needs graph inputs for training"
         assert args.val_source_graphs is not None, "GCN needs graph inputs for validation"
         assert args.edge_vocab is not None, "GCN needs an explicit edge vocabulary (in JSON format)"
-
+    else:
+        assert args.skip_rnn is False, "Skipping RNN encoder only works if using GCN."
+        assert args.use_gcn_gating is False, "Edge gating should only be used with --use-gcn."
     #####
 
     check_condition(args.optimized_metric == C.BLEU or args.optimized_metric in args.metrics,
