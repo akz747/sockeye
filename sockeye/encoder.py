@@ -385,7 +385,7 @@ class Embedding(Encoder):
         :param seq_len: Maximum sequence length.
         :return: Encoded versions of input data (data, data_length, seq_len).
         """
-        logger.info(str(data))
+        #logger.info(str(data))
         embedding = mx.sym.Embedding(data=data,
                                      input_dim=self.vocab_size,
                                      weight=self.embed_weight,
