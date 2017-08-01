@@ -1132,12 +1132,14 @@ class GraphConvEncoder(Encoder):
                  input_dim: int,
                  output_dim: int,
                  tensor_dim: int,
+                 use_gcn_gating: bool,
                  prefix: str = C.GCN_PREFIX,
                  layout: str = C.TIME_MAJOR,
                  fused: bool = False):
         self.layout = layout
         self.fused = fused
-        self.gcn = sockeye.gcn.get_gcn(input_dim, output_dim, tensor_dim, prefix)
+        self.gcn = sockeye.gcn.get_gcn(input_dim, output_dim, tensor_dim,
+                                       use_gcn_gating, prefix)
 
     def encode(self, data: mx.sym.Symbol, 
                data_length: mx.sym.Symbol, seq_len: int, metadata=None):
@@ -1145,17 +1147,9 @@ class GraphConvEncoder(Encoder):
         Convolve data using adj and the GCN parameters
         """
         adj = metadata
-        #logger.info('adj tensor')
-        #adj = mx.symbol.concat(data, adj, dim=0)
         with mx.AttrScope(__layout__=C.BATCH_MAJOR):
             data = mx.sym.swapaxes(data=data, dim1=0, dim2=1)
-        #outputs = mx.sym.batch_dot(adj, data)
         outputs = self.gcn.convolve(adj, data, seq_len)
-        #print(adj)
-        #logger.info("I am here!")
-        #logger.info(str(adj))
-        #logger.info(str(data))
-        #outputs = data
         with mx.AttrScope(__layout__=C.TIME_MAJOR):
             outputs = mx.sym.swapaxes(data=outputs, dim1=0, dim2=1)
         return outputs
