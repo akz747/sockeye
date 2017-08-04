@@ -840,7 +840,21 @@ def add_inference_args(params):
                                help='Beta factor for the length penalty used in beam search: '
                                     '(beta + len(Y))**alpha/(beta + 1)**alpha. Default: %(default)s')
 
+    #########
+    # Optional source metadata inputs
 
+    decode_params.add_argument('--source-graphs', '-smg',
+                             required=False,
+                             default=None,
+                             help='Source side graphs for GCN encoder (test)')
+    
+    decode_params.add_argument('--edge-vocab',
+                             required=False,
+                             default=None,
+                             help='Existing target vocabulary for graph edges (JSON)')
+    #########
+
+    
 def add_evaluate_args(params):
     eval_params = params.add_argument_group("Evaluate parameters")
     eval_params.add_argument('--references', '-r',
@@ -871,3 +885,4 @@ def add_build_vocab_args(params):
     params.add_argument('-i', '--inputs', required=True, nargs='+', help='List of text files to build vocabulary from.')
     params.add_argument('-o', '--output', required=True, type=str, help="Output filename to write vocabulary to.")
     add_vocab_args(params)
+

@@ -51,6 +51,7 @@ class InferenceModel(model.SockeyeModel):
                  model_folder: str,
                  context: mx.context.Context,
                  fused: bool,
+                 edge_vocab_size: int,
                  beam_size: int,
                  checkpoint: Optional[int] = None,
                  softmax_temperature: Optional[float] = None,
@@ -58,7 +59,6 @@ class InferenceModel(model.SockeyeModel):
         self.model_version = utils.load_version(os.path.join(model_folder, C.VERSION_NAME))
         logger.info("Model version: %s", self.model_version)
         utils.check_version(self.model_version)
-
         config = model.SockeyeModel.load_config(os.path.join(model_folder, C.CONFIG_NAME))
         super().__init__(config)
 
@@ -66,7 +66,7 @@ class InferenceModel(model.SockeyeModel):
 
         utils.check_condition(beam_size < self.config.vocab_target_size,
                               'The beam size must be smaller than the target vocabulary size.')
-
+        self.tensor_dim = edge_vocab_size
         self.beam_size = beam_size
         self.softmax_temperature = softmax_temperature
         self.encoder_batch_size = 1
@@ -134,11 +134,13 @@ class InferenceModel(model.SockeyeModel):
 
         def sym_gen(source_seq_len: int):
             source = mx.sym.Variable(C.SOURCE_NAME)
+            source_graphs = mx.sym.Variable(C.SOURCE_GRAPHS_NAME)
             source_length = utils.compute_lengths(source)
 
             (source_encoded,
              source_encoded_length,
-             source_encoded_seq_len) = self.encoder.encode(source, source_length, source_seq_len)
+             source_encoded_seq_len) = self.encoder.encode(source, source_length, source_seq_len,
+                                                           metadata=source_graphs)
             # TODO(fhieber): Consider standardizing encoders to return batch-major data to avoid this line.
             source_encoded = mx.sym.swapaxes(source_encoded, dim1=0, dim2=1)
 
@@ -147,7 +149,7 @@ class InferenceModel(model.SockeyeModel):
                                                            source_encoded_length,
                                                            source_encoded_seq_len)
 
-            data_names = [C.SOURCE_NAME]
+            data_names = [C.SOURCE_NAME, C.SOURCE_GRAPHS_NAME]
             label_names = []  # type: List[str]
             return mx.sym.Group(decoder_init_states), data_names, label_names
 
@@ -197,7 +199,7 @@ class InferenceModel(model.SockeyeModel):
                                         context=self.context)
         return module, default_bucket_key
 
-    def _get_encoder_data_shapes(self, bucket_key: int) -> List[mx.io.DataDesc]:
+    def _get_encoder_data_shapes(self, bucket_key: int, tensor_dim: int) -> List[mx.io.DataDesc]:
         """
         Returns data shapes of the encoder module.
 
@@ -206,7 +208,11 @@ class InferenceModel(model.SockeyeModel):
         """
         return [mx.io.DataDesc(name=C.SOURCE_NAME,
                                shape=(self.encoder_batch_size, bucket_key),
+                               layout=C.BATCH_MAJOR),
+                mx.io.DataDesc(name=C.SOURCE_GRAPHS_NAME, 
+                               shape=(self.encoder_batch_size, tensor_dim, bucket_key, bucket_key),
                                layout=C.BATCH_MAJOR)]
+
 
     def _get_decoder_data_shapes(self, bucket_key: Tuple[int, int]) -> List[mx.io.DataDesc]:
         """
@@ -226,6 +232,7 @@ class InferenceModel(model.SockeyeModel):
 
     def run_encoder(self,
                     source: mx.nd.NDArray,
+                    source_graph: mx.nd.NDArray,
                     source_max_length: int) -> List[mx.nd.NDArray]:
         """
         Runs forward pass of the encoder.
@@ -234,13 +241,25 @@ class InferenceModel(model.SockeyeModel):
         and initial decoder states tiled to beam size.
 
         :param source: Integer-coded input tokens.
+        :param source_graph: Graph input.
         :param source_max_length: Bucket key.
         :return: Encoded source, source length, initial decoder hidden state, initial decoder hidden states.
         """
-        batch = mx.io.DataBatch(data=[source],
+        batch = mx.io.DataBatch(data=[source, source_graph],
                                 label=None,
                                 bucket_key=source_max_length,
                                 provide_data=self._get_encoder_data_shapes(source_max_length))
+
+#        batch = mx.io.DataBatch(data=[source, source_length, source_graph], label=None,
+#                                bucket_key=bucket_key,
+#                                provide_data=[
+#        mx.io.DataDesc(name=C.SOURCE_NAME, shape=(self.encoder_batch_size, bucket_key),
+#                       layout=C.BATCH_MAJOR),
+#        mx.io.DataDesc(name=C.SOURCE_LENGTH_NAME, shape=(self.encoder_batch_size,),
+#                       layout=C.BATCH_MAJOR),
+#        mx.io.DataDesc(name=C.SOURCE_GRAPHS_NAME, shape=(self.encoder_batch_size, self.tensor_dim,
+#                                                         bucket_key, bucket_key),
+#                       layout=C.BATCH_MAJOR)])
 
         self.encoder_module.forward(data_batch=batch, is_train=False)
         decoder_states = self.encoder_module.get_outputs()
@@ -305,6 +324,7 @@ def load_models(context: mx.context.Context,
                 max_input_len: Optional[int],
                 beam_size: int,
                 model_folders: List[str],
+                edge_vocab_size: int,
                 checkpoints: Optional[List[int]] = None,
                 softmax_temperature: Optional[float] = None,
                 max_output_length_num_stds: int = C.DEFAULT_NUM_STD_MAX_OUTPUT_LENGTH) \
@@ -316,10 +336,11 @@ def load_models(context: mx.context.Context,
     :param max_input_len: Maximum input length.
     :param beam_size: Beam size.
     :param model_folders: List of model folders to load models from.
+    :param edge_vocab_size: Size of edge vocabulary.
     :param checkpoints: List of checkpoints to use for each model in model_folders. Use None to load best checkpoint.
     :param softmax_temperature: Optional parameter to control steepness of softmax distribution.
-    :param max_output_length_num_stds: Number of standard deviations to add to mean target-source length ratio
-           to compute maximum output length.
+    :param max_output_length_num_stds: Number of standard deviations to add to mean target-source length ratio to compute maximum output length.
+
     :return: List of models, source vocabulary, target vocabulary.
     """
     models, source_vocabs, target_vocabs = [], [], []
@@ -333,7 +354,8 @@ def load_models(context: mx.context.Context,
                                fused=False,
                                beam_size=beam_size,
                                softmax_temperature=softmax_temperature,
-                               checkpoint=checkpoint)
+                               checkpoint=checkpoint)                               
+        logger.info("LOADED MODEL")
         models.append(model)
 
     utils.check_condition(all(set(vocab.items()) == set(source_vocabs[0].items()) for vocab in source_vocabs),
@@ -413,6 +435,7 @@ TranslatorInput = NamedTuple('TranslatorInput', [
     ('id', int),
     ('sentence', str),
     ('tokens', List[str]),
+    ('graph', List[Tuple[int, int, int]])
 ])
 """
 Required input for Translator.
@@ -564,6 +587,7 @@ class Translator:
                  bucket_source_width: int,
                  bucket_target_width: int,
                  length_penalty: LengthPenalty,
+                 edge_vocab_size: int,
                  models: List[InferenceModel],
                  vocab_source: Dict[str, int],
                  vocab_target: Dict[str, int]) -> None:
@@ -572,6 +596,7 @@ class Translator:
         self.vocab_source = vocab_source
         self.vocab_target = vocab_target
         self.vocab_target_inv = vocab.reverse_vocab(self.vocab_target)
+        self.edge_vocab_size = edge_vocab_size
         self.start_id = self.vocab_target[C.BOS_SYMBOL]
         self.stop_ids = {self.vocab_target[C.EOS_SYMBOL], C.PAD_ID}  # type: Set[int]
         self.models = models
@@ -619,16 +644,21 @@ class Translator:
         return -mx.nd.log(mx.nd.softmax(log_probs))
 
     @staticmethod
-    def make_input(sentence_id: int, sentence: str) -> TranslatorInput:
+    def make_input(sentence_id: int, sentence: str, graph, edge_vocab) -> TranslatorInput:
         """
         Returns TranslatorInput from input_string
 
         :param sentence_id: Input sentence id.
         :param sentence: Input sentence.
+        :param graph: Input graph.
+        :param edge_vocab: Edge label vocabulary.
         :return: Input for translate method.
         """
         tokens = list(data_io.get_tokens(sentence))
-        return TranslatorInput(id=sentence_id, sentence=sentence.rstrip(), tokens=tokens)
+        edge_list = list(data_io.get_tokens(graph))
+        edges = data_io.process_edges(edge_list, edge_vocab)
+
+        return TranslatorInput(id=sentence_id, sentence=sentence.rstrip(), tokens=tokens, graph=edges)
 
     def translate(self, trans_input: TranslatorInput) -> TranslatorOutput:
         """
@@ -653,9 +683,9 @@ class Translator:
             translation = self._concat_translations(translations)
             return self._make_result(trans_input, translation)
         else:
-            return self._make_result(trans_input, self.translate_nd(*self._get_inference_input(trans_input.tokens)))
+            return self._make_result(trans_input, self.translate_nd(*self._get_inference_input(trans_input.tokens, trans_input.graph)))
 
-    def _get_inference_input(self, tokens: List[str]) -> Tuple[mx.nd.NDArray, int]:
+    def _get_inference_input(self, tokens: List[str], graph) -> Tuple[mx.nd.NDArray, mx.nd.NDArray, int]:
         """
         Returns NDArray of source ids (shape=(1, bucket_key)) and corresponding bucket_key.
 
@@ -669,7 +699,15 @@ class Translator:
         ids = data_io.tokens2ids(tokens, self.vocab_source)
         for i, wid in enumerate(ids):
             source[0, i] = wid
-        return source, bucket_key
+
+        ########
+        # GCN
+        new_graph = mx.nd.zeros((1, self.edge_vocab_size, bucket_key, bucket_key))
+        for tup in graph:
+            new_graph[0][tup[2]][tup[0]][tup[1]] = 1.0
+        ########
+
+        return source, new_graph, bucket_key
 
     def _make_result(self,
                      trans_input: TranslatorInput,
@@ -709,7 +747,8 @@ class Translator:
 
     def translate_nd(self,
                      source: mx.nd.NDArray,
-                     source_length: int) -> Translation:
+                     source_length: int,
+                     source_graph: mx.nd.NDArray) -> Translation:
         """
         Translates source of source_length, given a bucket_key.
 
@@ -718,17 +757,20 @@ class Translator:
 
         :return: Sequence of translated ids, attention matrix, length-normalized negative log probability.
         """
-        return self._get_best_from_beam(*self._beam_search(source, source_length))
+        return self._get_best_from_beam(*self._beam_search(source, source_length, source_graph))
 
-    def _encode(self, source: mx.nd.NDArray, source_length: int) -> List[ModelState]:
+    def _encode(self, source: mx.nd.NDArray,
+                source_length: int,
+                source_graph: mx.nd.NDArray) -> List[ModelState]:
         """
         Returns a ModelState for each model representing the state of the model after encoding the source.
 
         :param source: Source ids. Shape: (1, bucket_key).
         :param source_length: Bucket key.
+        :param source_graph: Input graph.
         :return: List of ModelStates.
         """
-        return [ModelState(states=m.run_encoder(source, source_length)) for m in self.models]
+        return [ModelState(states=m.run_encoder(source, source_length, source_graph)) for m in self.models]
 
     def _decode_step(self,
                      sequences: mx.nd.NDArray,
@@ -785,12 +827,14 @@ class Translator:
 
     def _beam_search(self,
                      source: mx.nd.NDArray,
-                     source_length: int) -> Tuple[mx.nd.NDArray, mx.nd.NDArray, mx.nd.NDArray, mx.nd.NDArray]:
+                     source_length: int,
+                     source_graph: mx.nd.NDArray) -> Tuple[mx.nd.NDArray, mx.nd.NDArray, mx.nd.NDArray, mx.nd.NDArray]:
         """
         Translates a single sentence using beam search.
 
         :param source: Source ids. Shape: (1, bucket_key).
         :param source_length: Source length.
+        :param source_graph: Soruce graph.
         :return List of lists of word ids, list of attentions, array of accumulated length-normalized
                 negative log-probs.
         """
@@ -823,7 +867,7 @@ class Translator:
         self.pad_dist[:] = np.inf
 
         # (0) encode source sentence
-        model_states = self._encode(source, source_length)
+        model_states = self._encode(source, source_length, source_graph)
 
         for t in range(1, max_output_length):
 
