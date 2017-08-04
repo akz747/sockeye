@@ -842,11 +842,6 @@ def add_inference_args(params):
 
     #########
     # Optional source metadata inputs
-
-    decode_params.add_argument('--source-graphs', '-smg',
-                             required=False,
-                             default=None,
-                             help='Source side graphs for GCN encoder (test)')
     
     decode_params.add_argument('--edge-vocab',
                              required=False,
