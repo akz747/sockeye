@@ -541,6 +541,7 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
             
         self.indices = []
         for i in range(len(self.data_source)):
+            logger.info("Building bucket %d" % i)
             # shuffle indices within each bucket
             self.indices.append(np.random.permutation(len(self.data_source[i])))
             self._append_ndarrays(i, self.indices[-1])
