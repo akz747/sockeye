@@ -23,9 +23,11 @@ from typing import Dict, Iterator, Iterable, List, NamedTuple, Optional, Tuple
 
 import mxnet as mx
 import numpy as np
-import scipy.sparse as sp
 
 import sockeye.constants as C
+
+# For GCN adj tensors
+import sparse
 
 logger = logging.getLogger(__name__)
 
@@ -291,10 +293,16 @@ def process_edges(graph_tokens: Iterable[str], vocab: Dict[str, int]): #TODO: ad
     :param graph_tokens: List of tokens containing graph edges.
     :return: List of (int, int) tuples
     """
-    adj_list = [(int(tok[1:-1].split(',')[0]),
-                 int(tok[1:-1].split(',')[1]),
-                 vocab[tok[1:-1].split(',')[2]]) for tok in graph_tokens]
-    return adj_list
+    adj = [(int(tok[1:-1].split(',')[0]),
+            int(tok[1:-1].split(',')[1]),
+            vocab[tok[1:-1].split(',')[2]]) for tok in graph_tokens]
+    #adj = {}
+    #for tok in graph_tokens:
+    #    src = int(tok[1:-1].split(',')[0])
+    #    tgt = int(tok[1:-1].split(',')[1])
+    #    label_id = vocab[tok[1:-1].split(',')[2]]
+    #    adj[(src, tgt)] = label_id
+    return adj
     
 
 # TODO: consider more memory-efficient data reading (load from disk on demand)
@@ -496,9 +504,14 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
                     # GCN: we add an empty list as padding
                     #self.data_src_graphs[i] = np.concatenate((self.data_src_graphs[i], self.data_src_graphs[i][random_indices, :, :, :]),
                     #                                     axis=0)
+                    #self.data_src_graphs[i] = sparse.concatenate((self.data_src_graphs[i], self.data_src_graphs[i][random_indices, :, :]), axis=0)
+                    #print(self.data_src_graphs[i])
+                    #print(random_indices)
+                    #print(self.data_src_graphs[i][list(random_indices)])
+                    self.data_src_graphs[i] = sparse.concatenate((self.data_src_graphs[i], self.data_src_graphs[i][list(random_indices)]), axis=0)
                     #print(self.data_src_graphs[i])
                     #print(len(self.data_src_graphs[i]))
-                    self.data_src_graphs[i] += [self.data_src_graphs[i][rand] for rand in random_indices]
+                    #self.data_src_graphs[i] += [self.data_src_graphs[i][rand] for rand in random_indices]
                     #print(self.data_src_graphs[i])
                     #print(len(self.data_src_graphs[i]))
                     ####
@@ -516,14 +529,19 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
         #logger.info("BUCKET SIZE: %d", bucket_size)
         #new_src_graphs = np.array([np.zeros((self.edge_vocab_size, bucket_size, bucket_size)) for sent in range(batch_size)])
         #new_src_graphs = sp.dok_matrix([np.zeros((self.edge_vocab_size, bucket_size, bucket_size)) for sent in range(batch_size)])
-        new_src_graphs = [[sp.csr_matrix((bucket_size, bucket_size)) for edge in range(self.edge_vocab_size)] for sent in range(batch_size)]
-        for i, graph in enumerate(data_src_graphs):
-            for tup in graph:
+        #new_src_graphs = [[sp.csr_matrix((bucket_size, bucket_size)) for edge in range(self.edge_vocab_size)] for sent in range(batch_size)]
+        #for i, graph in enumerate(data_src_graphs):
+        #    for tup in graph:
                 #print(tup)
                 #print(new_src_graphs)
                 #print(new_src_graphs[i])
                 #print(new_src_graphs[i][tup[2]])
-                new_src_graphs[i][tup[2]][tup[0], tup[1]] = 1.0
+        #        new_src_graphs[i][tup[2]][tup[0], tup[1]] = 1.0
+        d = {}
+        for i, graph in enumerate(data_src_graphs):
+            for tup in graph:
+                d[(i, tup[2], tup[0], tup[1])] = 1.0
+        new_src_graphs = sparse.COO(d)
         return new_src_graphs
         
     def reset(self):
@@ -542,18 +560,21 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
         # GCN
         self.nd_src_graphs = []
         #####
-        for i in range(len(self.data_source)):
+
+        
+        #for i in range(len(self.data_source)):
             # shuffle indices within each bucket
-            indices = np.random.permutation(len(self.data_source[i]))
-            self.nd_source.append(mx.nd.array(self.data_source[i].take(indices, axis=0), dtype=self.dtype))
-            self.nd_length.append(mx.nd.array(self.data_length[i].take(indices, axis=0), dtype=self.dtype))
-            self.nd_target.append(mx.nd.array(self.data_target[i].take(indices, axis=0), dtype=self.dtype))
-            self.nd_label.append(mx.nd.array(self.data_label[i].take(indices, axis=0), dtype=self.dtype))
+        #    indices = np.random.permutation(len(self.data_source[i]))
+        #    self.nd_source.append(mx.nd.array(self.data_source[i].take(indices, axis=0), dtype=self.dtype))
+        #    self.nd_length.append(mx.nd.array(self.data_length[i].take(indices, axis=0), dtype=self.dtype))
+        #    self.nd_target.append(mx.nd.array(self.data_target[i].take(indices, axis=0), dtype=self.dtype))
+        #    self.nd_label.append(mx.nd.array(self.data_label[i].take(indices, axis=0), dtype=self.dtype))
             #self.nd_src_graphs.append(mx.nd.array(self.data_src_graphs[i].take(indices, axis=0), dtype=self.dtype))
-            src_graphs = np.array([[self.data_src_graphs[i][index][e].toarray() for e in range(self.edge_vocab_size)] for index in indices])
+            #src_graphs = np.array([[self.data_src_graphs[i][index][e].toarray() for e in range(self.edge_vocab_size)] for index in indices])
             #print(src_graphs)
             #print(src_graphs[indices[0]])
-            self.nd_src_graphs.append(mx.nd.array(src_graphs, dtype=self.dtype))
+        #    self.nd_src_graphs(self.data_src_graphs[i]
+        #    self.nd_src_graphs.append(mx.nd.array(src_graphs, dtype=self.dtype))
             
         self.indices = []
         for i in range(len(self.data_source)):
@@ -574,11 +595,15 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
         self.nd_target.append(mx.nd.array(self.data_target[bucket].take(shuffled_indices, axis=0), dtype=self.dtype))
         self.nd_label.append(mx.nd.array(self.data_label[bucket].take(shuffled_indices, axis=0), dtype=self.dtype))
         #####
-        #self.nd_src_graphs.append(mx.nd.array(self.data_src_graphs[bucket].take(shuffled_indices, axis=0), dtype=self.dtype))
-        src_graphs = np.array([[self.data_src_graphs[bucket][index][e].toarray() for e in range(self.edge_vocab_size)] for index in shuffled_indices])
+        print(self.data_src_graphs)
+        print(self.data_source[bucket])
+        print(self.data_source[bucket].take(shuffled_indices, axis=0))
+        print(self.data_src_graphs[bucket])
+        self.nd_src_graphs.append(mx.nd.array(self.data_src_graphs[bucket].todense().take(shuffled_indices, axis=0), dtype=self.dtype))
+        #src_graphs = np.array([[self.data_src_graphs[bucket][index][e].toarray() for e in range(self.edge_vocab_size)] for index in shuffled_indices])
         #print(src_graphs)
         #print(src_graphs[indices[0]])
-        self.nd_src_graphs.append(mx.nd.array(src_graphs, dtype=self.dtype))
+        #self.nd_src_graphs.append(mx.nd.array(src_graphs, dtype=self.dtype))
 
     def iter_next(self) -> bool:
         """
