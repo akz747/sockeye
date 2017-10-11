@@ -23,6 +23,7 @@ from typing import Dict, Iterator, Iterable, List, NamedTuple, Optional, Tuple
 
 import mxnet as mx
 import numpy as np
+import scipy.sparse as sp
 
 import sockeye.constants as C
 
@@ -493,8 +494,13 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
                                                         axis=0)
                     ####
                     # GCN: we add an empty list as padding
-                    self.data_src_graphs[i] = np.concatenate((self.data_src_graphs[i], self.data_src_graphs[i][random_indices, :, :, :]),
-                                                         axis=0)
+                    #self.data_src_graphs[i] = np.concatenate((self.data_src_graphs[i], self.data_src_graphs[i][random_indices, :, :, :]),
+                    #                                     axis=0)
+                    #print(self.data_src_graphs[i])
+                    #print(len(self.data_src_graphs[i]))
+                    self.data_src_graphs[i] += [self.data_src_graphs[i][rand] for rand in random_indices]
+                    #print(self.data_src_graphs[i])
+                    #print(len(self.data_src_graphs[i]))
                     ####
                     #logger.info('Shapes after replication')
                     #logger.info(self.data_source[i].shape)
@@ -508,10 +514,16 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
         """
         batch_size = len(data_src_graphs)
         #logger.info("BUCKET SIZE: %d", bucket_size)
-        new_src_graphs = np.array([np.zeros((self.edge_vocab_size, bucket_size, bucket_size)) for sent in range(batch_size)])
+        #new_src_graphs = np.array([np.zeros((self.edge_vocab_size, bucket_size, bucket_size)) for sent in range(batch_size)])
+        #new_src_graphs = sp.dok_matrix([np.zeros((self.edge_vocab_size, bucket_size, bucket_size)) for sent in range(batch_size)])
+        new_src_graphs = [[sp.dok_matrix((bucket_size, bucket_size)) for edge in range(self.edge_vocab_size)] for sent in range(batch_size)]
         for i, graph in enumerate(data_src_graphs):
             for tup in graph:
-                new_src_graphs[i][tup[2]][tup[0]][tup[1]] = 1.0
+                #print(tup)
+                #print(new_src_graphs)
+                #print(new_src_graphs[i])
+                #print(new_src_graphs[i][tup[2]])
+                new_src_graphs[i][tup[2]][tup[0], tup[1]] = 1.0
         return new_src_graphs
         
     def reset(self):
@@ -537,7 +549,11 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
             self.nd_length.append(mx.nd.array(self.data_length[i].take(indices, axis=0), dtype=self.dtype))
             self.nd_target.append(mx.nd.array(self.data_target[i].take(indices, axis=0), dtype=self.dtype))
             self.nd_label.append(mx.nd.array(self.data_label[i].take(indices, axis=0), dtype=self.dtype))
-            self.nd_src_graphs.append(mx.nd.array(self.data_src_graphs[i].take(indices, axis=0), dtype=self.dtype))
+            #self.nd_src_graphs.append(mx.nd.array(self.data_src_graphs[i].take(indices, axis=0), dtype=self.dtype))
+            src_graphs = np.array([[self.data_src_graphs[i][index][e].toarray() for e in range(self.edge_vocab_size)] for index in indices])
+            #print(src_graphs)
+            #print(src_graphs[indices[0]])
+            self.nd_src_graphs.append(mx.nd.array(src_graphs, dtype=self.dtype))
             
         self.indices = []
         for i in range(len(self.data_source)):
@@ -558,7 +574,11 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
         self.nd_target.append(mx.nd.array(self.data_target[bucket].take(shuffled_indices, axis=0), dtype=self.dtype))
         self.nd_label.append(mx.nd.array(self.data_label[bucket].take(shuffled_indices, axis=0), dtype=self.dtype))
         #####
-        self.nd_src_graphs.append(mx.nd.array(self.data_src_graphs[bucket].take(shuffled_indices, axis=0), dtype=self.dtype))
+        #self.nd_src_graphs.append(mx.nd.array(self.data_src_graphs[bucket].take(shuffled_indices, axis=0), dtype=self.dtype))
+        src_graphs = np.array([[self.data_src_graphs[bucket][index][e].toarray() for e in range(self.edge_vocab_size)] for index in shuffled_indices])
+        #print(src_graphs)
+        #print(src_graphs[indices[0]])
+        self.nd_src_graphs.append(mx.nd.array(src_graphs, dtype=self.dtype))
 
     def iter_next(self) -> bool:
         """
