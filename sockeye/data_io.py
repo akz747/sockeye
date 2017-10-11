@@ -530,14 +530,14 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
         # GCN
         self.nd_src_graphs = []
         #####
-        for i in range(len(self.data_source)):
-            # shuffle indices within each bucket
-            indices = np.random.permutation(len(self.data_source[i]))
-            self.nd_source.append(mx.nd.array(self.data_source[i].take(indices, axis=0), dtype=self.dtype))
-            self.nd_length.append(mx.nd.array(self.data_length[i].take(indices, axis=0), dtype=self.dtype))
-            self.nd_target.append(mx.nd.array(self.data_target[i].take(indices, axis=0), dtype=self.dtype))
-            self.nd_label.append(mx.nd.array(self.data_label[i].take(indices, axis=0), dtype=self.dtype))
-            self.nd_src_graphs.append(mx.nd.array(self.data_src_graphs[i].take(indices, axis=0), dtype=self.dtype))
+        # for i in range(len(self.data_source)):
+        #     # shuffle indices within each bucket
+        #     indices = np.random.permutation(len(self.data_source[i]))
+        #     self.nd_source.append(mx.nd.array(self.data_source[i].take(indices, axis=0), dtype=self.dtype))
+        #     self.nd_length.append(mx.nd.array(self.data_length[i].take(indices, axis=0), dtype=self.dtype))
+        #     self.nd_target.append(mx.nd.array(self.data_target[i].take(indices, axis=0), dtype=self.dtype))
+        #     self.nd_label.append(mx.nd.array(self.data_label[i].take(indices, axis=0), dtype=self.dtype))
+        #     self.nd_src_graphs.append(mx.nd.array(self.data_src_graphs[i].take(indices, axis=0), dtype=self.dtype))
             
         self.indices = []
         for i in range(len(self.data_source)):
