@@ -782,6 +782,7 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
         # GCN
         self.nd_src_graphs = []
         #####
+
         self.indices = []
         for i in range(len(self.data_source)):
             # shuffle indices within each bucket
