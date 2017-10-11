@@ -595,16 +595,24 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
         self.nd_target.append(mx.nd.array(self.data_target[bucket].take(shuffled_indices, axis=0), dtype=self.dtype))
         self.nd_label.append(mx.nd.array(self.data_label[bucket].take(shuffled_indices, axis=0), dtype=self.dtype))
         #####
-        print(self.data_src_graphs)
+        #print(self.data_src_graphs)
         print(self.data_source[bucket])
-        print(self.data_source[bucket].take(shuffled_indices, axis=0))
+        #print(self.data_source[bucket].take(shuffled_indices, axis=0))
         print(self.data_src_graphs[bucket])
-        self.nd_src_graphs.append(mx.nd.array(self.data_src_graphs[bucket].todense().take(shuffled_indices, axis=0), dtype=self.dtype))
+        if self.data_src_graphs[bucket].shape == ():
+            to_convert = np.array([])
+        else:
+            to_convert = self.data_src_graphs[bucket].todense()
+        self.nd_src_graphs.append(mx.nd.array(to_convert.take(shuffled_indices, axis=0), dtype=self.dtype))
+        #self.nd_src_graphs.append(mx.nd.array(self.data_src_graphs[bucket].todense().take(shuffled_indices, axis=0), dtype=self.dtype))
         #src_graphs = np.array([[self.data_src_graphs[bucket][index][e].toarray() for e in range(self.edge_vocab_size)] for index in shuffled_indices])
         #print(src_graphs)
         #print(src_graphs[indices[0]])
         #self.nd_src_graphs.append(mx.nd.array(src_graphs, dtype=self.dtype))
+        print(self.nd_source)
+        print(self.nd_src_graphs)
 
+        
     def iter_next(self) -> bool:
         """
         True if iterator can return another batch
