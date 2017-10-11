@@ -516,7 +516,7 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
         #logger.info("BUCKET SIZE: %d", bucket_size)
         #new_src_graphs = np.array([np.zeros((self.edge_vocab_size, bucket_size, bucket_size)) for sent in range(batch_size)])
         #new_src_graphs = sp.dok_matrix([np.zeros((self.edge_vocab_size, bucket_size, bucket_size)) for sent in range(batch_size)])
-        new_src_graphs = [[sp.dok_matrix((bucket_size, bucket_size)) for edge in range(self.edge_vocab_size)] for sent in range(batch_size)]
+        new_src_graphs = [[sp.csr_matrix((bucket_size, bucket_size)) for edge in range(self.edge_vocab_size)] for sent in range(batch_size)]
         for i, graph in enumerate(data_src_graphs):
             for tup in graph:
                 #print(tup)
