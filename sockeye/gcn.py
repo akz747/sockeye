@@ -83,10 +83,6 @@ class GCNCell(object):
             self._gate_b = [mx.symbol.Variable(self._prefix + str(i) + '_gate_bias',
                                                shape=(1, 1))
                                                for i in range(tensor_dim)]
-        #self._W = mx.symbol.Variable(self._prefix + 'weight',
-        #                             shape=(tensor_dim, input_dim, output_dim))
-        #self._b = mx.symbol.Variable(self._prefix + 'bias',
-        #                             shape=(tensor_dim, output_dim))
 
     def convolve(self, adj, inputs, seq_len):
         output_list = []
@@ -106,11 +102,7 @@ class GCNCell(object):
                 output = mx.symbol.broadcast_mul(output, gate_val)
             # convolution
             adji = mx.symbol.slice_axis(adj, axis=1, begin=i, end=i+1)
-            #import logging
-            #logger = logging.getLogger(__name__)
-            #logger.info('BEFORE RESHAPE')
             adji = mx.symbol.reshape(adji, shape=(-1, seq_len, seq_len))
-            #logger.info('AFTER RESHAPE')
             output = mx.symbol.batch_dot(adji, output)
             output = mx.symbol.expand_dims(output, axis=1)
             output_list.append(output)
@@ -118,22 +110,7 @@ class GCNCell(object):
         outputs = mx.symbol.sum(outputs, axis=1)
         final_output = mx.symbol.Activation(outputs, act_type=self._activation)
         final_output = mx.symbol.Dropout(final_output, p=self._dropout)
-        #logger.info('FINAL OUTPUT')
         return final_output
-
-        # inputs go through linear transformation
-        # annoyingly, MXNet does not have a batched version
-        # of FullyConnected so we need some reshaping
-        #reshaped = mx.symbol.reshape(inputs, (-3, -1))
-        #outputs = mx.symbol.FullyConnected(data=reshaped, weight=self._W,
-        #                                   bias=self._b, num_hidden=self._num_hidden,
-        #                                   name='%sFC'%self._prefix)
-        #outputs = mx.symbol.reshape(outputs, (-1, seq_len, self._num_hidden))
-        # now they are convolved according to the adj matrix                                  
-        #outputs = mx.symbol.batch_dot(adj, outputs)
-        # finally, we apply a non-linear transformation
-        #outputs = mx.symbol.Activation(outputs, act_type=self._activation)
-        #return outputs
 
     def reset(self):
         pass
