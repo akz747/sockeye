@@ -56,7 +56,8 @@ ModelConfig = sockeye.utils.namedtuple_with_defaults('ModelConfig',
                                                       "gcn_num_layers",
                                                       "skip_rnn",
                                                       "gcn_num_hidden",
-                                                      "gcn_num_tensor",
+                                                         "gcn_num_tensor",
+                                                         "gcn_rank",
                                                   ],
                                                      default_values={
                                                       "attention_use_prev_word": False,
@@ -162,6 +163,7 @@ class SockeyeModel:
                                                    self.config.skip_rnn,
                                                    self.config.gcn_num_hidden,
                                                    self.config.gcn_num_tensor,
+                                                   self.config.gcn_rank,
                                                    rnn_forget_bias,
                                                    fused_encoder)
 

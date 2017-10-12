@@ -230,6 +230,10 @@ def add_model_parameters(params):
                               type=int_greater_or_equal(1),
                               default=512,
                               help='Number of GCN hidden units for encoder (use only with --use-gcn). Default: %(default)s.')
+    model_params.add_argument('--gcn-rank',
+                              type=int_greater_or_equal(1),
+                              default=16,
+                              help='Rank/embedding size for edge labels in GCN encoder (use only with --use-gcn). Default: %(default)s.')
     
     #####
     

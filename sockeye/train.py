@@ -249,6 +249,7 @@ def main():
                                                  skip_rnn=args.skip_rnn,
                                                  gcn_num_hidden=args.gcn_num_hidden,
                                                  gcn_num_tensor=vocab_edges_size,
+                                                 gcn_rank=args.gcn_rank,
                                                  )
 
         # create training model

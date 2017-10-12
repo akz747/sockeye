@@ -7,9 +7,10 @@ import mxnet as mx
 import sockeye.constants as C
 
 def get_gcn(input_dim: int, output_dim: int, 
-            tensor_dim: int, use_gcn_gating: bool, 
+            tensor_dim: int, rank: int, use_gcn_gating: bool, 
             dropout: float, prefix: str):
-    gcn = GCNCell(input_dim, output_dim, tensor_dim, add_gate=use_gcn_gating,
+    gcn = GCNCell(input_dim, output_dim, tensor_dim, rank,
+                  add_gate=use_gcn_gating,
                   dropout=dropout, prefix=prefix)
     return gcn
    
@@ -49,6 +50,7 @@ class GCNCell(object):
     """GCN cell
     """
     def __init__(self, input_dim, output_dim, tensor_dim,
+                 rank=16,
                  add_gate=False,
                  prefix='gcn_', params=None, 
                  activation='relu',
@@ -69,29 +71,49 @@ class GCNCell(object):
         self.reset()
         self._activation = activation
         self._dropout = dropout
-        self._W = [mx.symbol.Variable(self._prefix + str(i) + '_weight',
-                                      shape=(input_dim, output_dim))
-                                      for i in range(tensor_dim)]
-        self._b = [mx.symbol.Variable(self._prefix + str(i) + '_bias',
-                                      shape=(output_dim,))
-                                      for i in range(tensor_dim)]
+        self._rank = rank
+
+        # Old parameters
+        #self._W = [mx.symbol.Variable(self._prefix + str(i) + '_weight',
+        #                              shape=(input_dim, output_dim))
+        #                              for i in range(tensor_dim)]
+        #self._b = [mx.symbol.Variable(self._prefix + str(i) + '_bias',
+        #                              shape=(output_dim,))
+        #                              for i in range(tensor_dim)]
+
+        # Tensor factorization parameters
+        # W_l = P^T . diag(Ql) . R
+        self._P = mx.symbol.Variable(self._prefix + '_P_weight',
+                                     shape=(rank, output_dim))
+        self._R = mx.symbol.Variable(self._prefix + '_R_weight',
+                                     shape=(rank, input_dim))
+        self._Q = [mx.symbol.Variable(self._prefix + str(i) + '_Q_bias',
+                                     shape=(rank,))
+                   for i in range(tensor_dim)]
+        self._b = mx.symbol.Variable(self._prefix + '_bias',
+                                     shape=(output_dim,))
+
+        
         # Gate parameters
         if self._add_gate:
             self._gate_W = [mx.symbol.Variable(self._prefix + str(i) + '_gate_weight',
                                                shape=(input_dim, 1))
-                                               for i in range(tensor_dim)]
+                            for i in range(tensor_dim)]
             self._gate_b = [mx.symbol.Variable(self._prefix + str(i) + '_gate_bias',
                                                shape=(1, 1))
-                                               for i in range(tensor_dim)]
+                            for i in range(tensor_dim)]
 
     def convolve(self, adj, inputs, seq_len):
         output_list = []
         for i in range(self._tensor_dim):
             # linear transformation
-            Wi = self._W[i]
-            bi = self._b[i]            
+            #Wi = self._W[i]
+            Qi = self._Q[i]
+            Wi = mx.symbol.broadcast_mul(self._P.transpose(), Qi)
+            Wi = mx.symbol.dot(Wi, self._R).transpose()
+            #bi = self._b[i]
             output = mx.symbol.dot(inputs, Wi)
-            output = mx.symbol.broadcast_add(output, bi)
+            output = mx.symbol.broadcast_add(output, self._b)
             # optional gating
             if self._add_gate:
                 gate_Wi = self._gate_W[i]

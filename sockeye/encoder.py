@@ -41,6 +41,7 @@ def get_encoder(num_embed: int,
                 skip_rnn: bool,
                 gcn_num_hidden: int,
                 gcn_num_tensor: int,
+                gcn_rank: int,
                 forget_bias: float,
                 fused: bool = False) -> 'Encoder':
     """
@@ -94,17 +95,17 @@ def get_encoder(num_embed: int,
         if skip_rnn:
             # GCN encoder on top of an embedding layer
             encoders.append(GraphConvEncoder(num_embed, gcn_num_hidden, 
-                                             gcn_num_tensor, use_gcn_gating,
+                                             gcn_num_tensor, gcn_rank, use_gcn_gating,
                                              dropout))
         else:            
             encoders.append(GraphConvEncoder(rnn_num_hidden, gcn_num_hidden, 
-                                             gcn_num_tensor, use_gcn_gating,
+                                             gcn_num_tensor, gcn_rank, use_gcn_gating,
                                              dropout))
         if gcn_num_layers > 1:
             # TODO: allow different hidden layer sizes.
             for i in range(1, gcn_num_layers):
                 encoders.append(GraphConvEncoder(gcn_num_hidden, gcn_num_hidden, 
-                                                 gcn_num_tensor, use_gcn_gating, 0.0,
+                                                 gcn_num_tensor, gcn_rank, use_gcn_gating, 0.0,
                                                  prefix=C.GCN_PREFIX + str(i+1) + '_'))
 
     logger.info(encoders)    
@@ -458,6 +459,7 @@ class GraphConvEncoder(Encoder):
                  input_dim: int,
                  output_dim: int,
                  tensor_dim: int,
+                 rank: int,
                  use_gcn_gating: bool,
                  dropout: float,
                  prefix: str = C.GCN_PREFIX,
@@ -466,7 +468,7 @@ class GraphConvEncoder(Encoder):
         self.layout = layout
         self.fused = fused
         self._num_hidden = output_dim
-        self.gcn = sockeye.gcn.get_gcn(input_dim, output_dim, tensor_dim,
+        self.gcn = sockeye.gcn.get_gcn(input_dim, output_dim, tensor_dim, rank,
                                        use_gcn_gating, dropout, prefix)
 
     def encode(self, data: mx.sym.Symbol, 
