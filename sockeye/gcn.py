@@ -111,7 +111,8 @@ class GCNCell(object):
             Qi = self._Q[i]
             #PT = mx.symbol.swapaxes(self._P, dim1=0, dim2=1)
             Wi = mx.symbol.broadcast_mul(self._PT, Qi)
-            Wi = mx.symbol.dot(Wi, self._R).transpose()
+            Wi = mx.symbol.dot(Wi, self._R)
+            Wi = mx.symbol.transpose(Wi)
             #bi = self._b[i]
             output = mx.symbol.dot(inputs, Wi)
             output = mx.symbol.broadcast_add(output, self._b)
