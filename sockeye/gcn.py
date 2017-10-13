@@ -83,10 +83,11 @@ class GCNCell(object):
 
         # Tensor factorization parameters
         # W_l = P^T . diag(Ql) . R
-        self._PT = mx.symbol.Variable(self._prefix + '_P_weight',
-                                     shape=(output_dim, rank))
-        self._R = mx.symbol.Variable(self._prefix + '_R_weight',
-                                     shape=(rank, input_dim))
+        # W_l^T = R^T . diag(Ql) . P
+        self._P = mx.symbol.Variable(self._prefix + '_P_weight',
+                                     shape=(rank, output_dim))
+        self._RT = mx.symbol.Variable(self._prefix + '_R_weight',
+                                     shape=(input_dim, rank))
         self._Q = [mx.symbol.Variable(self._prefix + str(i) + '_Q_bias',
                                      shape=(rank,))
                    for i in range(tensor_dim)]
@@ -110,9 +111,11 @@ class GCNCell(object):
             #Wi = self._W[i]
             Qi = self._Q[i]
             #PT = mx.symbol.swapaxes(self._P, dim1=0, dim2=1)
-            Wi = mx.symbol.broadcast_mul(self._PT, Qi)
-            Wi = mx.symbol.dot(Wi, self._R)
-            Wi = mx.symbol.transpose(Wi)
+            #Wi = mx.symbol.broadcast_mul(self._PT, Qi)
+            #Wi = mx.symbol.dot(Wi, self._R)
+            Wi = mx.symbol.broadcast_mul(self._RT, Qi)
+            Wi = mx.symbol.dot(Wi, self._P)
+            #Wi = mx.symbol.transpose(Wi)
             #bi = self._b[i]
             output = mx.symbol.dot(inputs, Wi)
             output = mx.symbol.broadcast_add(output, self._b)
