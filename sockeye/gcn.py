@@ -83,8 +83,8 @@ class GCNCell(object):
 
         # Tensor factorization parameters
         # W_l = P^T . diag(Ql) . R
-        self._P = mx.symbol.Variable(self._prefix + '_P_weight',
-                                     shape=(rank, output_dim))
+        self._PT = mx.symbol.Variable(self._prefix + '_P_weight',
+                                     shape=(output_dim, rank))
         self._R = mx.symbol.Variable(self._prefix + '_R_weight',
                                      shape=(rank, input_dim))
         self._Q = [mx.symbol.Variable(self._prefix + str(i) + '_Q_bias',
@@ -109,7 +109,8 @@ class GCNCell(object):
             # linear transformation
             #Wi = self._W[i]
             Qi = self._Q[i]
-            Wi = mx.symbol.broadcast_mul(self._P.transpose(), Qi)
+            #PT = mx.symbol.swapaxes(self._P, dim1=0, dim2=1)
+            Wi = mx.symbol.broadcast_mul(self._PT, Qi)
             Wi = mx.symbol.dot(Wi, self._R).transpose()
             #bi = self._b[i]
             output = mx.symbol.dot(inputs, Wi)
