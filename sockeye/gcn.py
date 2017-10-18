@@ -85,6 +85,11 @@ class GCNCell(object):
                                                for i in range(tensor_dim)]
 
     def convolve(self, adj, inputs, seq_len):
+        """
+        IMPORTANT: when retrieving the original adj matrix for an
+        edge label we add one to "i" because the edge ids stored
+        in the matrix start at 1. 0 corresponds to lack of edges.
+        """
         output_list = []
         for i in range(self._tensor_dim):
             # linear transformation
@@ -101,8 +106,9 @@ class GCNCell(object):
                 gate_val = mx.symbol.Activation(gate_val, act_type='sigmoid')
                 output = mx.symbol.broadcast_mul(output, gate_val)
             # convolution
-            mask = mx.symbol.ones_like(adj) * i
-            adji = (mask == adj) / i           
+            label_id = i + 1
+            mask = mx.symbol.ones_like(adj) * label_id
+            adji = (mask == adj) / label_id
             #adji = mx.symbol.slice_axis(adj, axis=1, begin=i, end=i+1)
             #adji = mx.symbol.reshape(adji, shape=(-1, seq_len, seq_len))
             output = mx.symbol.batch_dot(adji, output)

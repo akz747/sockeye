@@ -758,13 +758,17 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
         Graph information is in the form of an adjacency list.
         We convert this to an adjacency matrix in NumPy format.
         The matrix contains label ids.
+        IMPORTANT: we add one to the label id stored in the matrix.
+        This is because 0 is a valid vocab id but we want to use 0's
+        to represent lack of edges instead. This means that the GCN code
+        should account for this.
         """
         batch_size = len(data_src_graphs)
         #logger.info("BUCKET SIZE: %d", bucket_size)
         new_src_graphs = np.array([np.zeros((bucket_size, bucket_size)) for sent in range(batch_size)])
         for i, graph in enumerate(data_src_graphs):
             for tup in graph:
-                new_src_graphs[i][tup[0]][tup[1]] = tup[2]
+                new_src_graphs[i][tup[0]][tup[1]] = tup[2] + 1
         return new_src_graphs
         
     def reset(self):
@@ -785,7 +789,7 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
 
         self.indices = []
         for i in range(len(self.data_source)):
-            logger.info("Building bucket %d" % i)
+            #logger.info("Building bucket %d" % i)
             # shuffle indices within each bucket
             self.indices.append(np.random.permutation(len(self.data_source[i])))
             self._append_ndarrays(i, self.indices[-1])
