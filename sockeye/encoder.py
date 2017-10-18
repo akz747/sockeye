@@ -1134,10 +1134,12 @@ class GraphConvEncoder(Encoder):
                  tensor_dim: int,
                  use_gcn_gating: bool,
                  dropout: float,
+                 residual: bool = True,
                  prefix: str = C.GCN_PREFIX,
                  layout: str = C.TIME_MAJOR,
                  fused: bool = False):
         self.layout = layout
+        self._residual = residual
         self.fused = fused
         self._num_hidden = output_dim
         self.gcn = sockeye.gcn.get_gcn(input_dim, output_dim, tensor_dim,
@@ -1152,6 +1154,8 @@ class GraphConvEncoder(Encoder):
         with mx.AttrScope(__layout__=C.BATCH_MAJOR):
             data = mx.sym.swapaxes(data=data, dim1=0, dim2=1)
         outputs = self.gcn.convolve(adj, data, seq_len)
+        if self._residual:
+            outputs = outputs + data
         with mx.AttrScope(__layout__=C.TIME_MAJOR):
             outputs = mx.sym.swapaxes(data=outputs, dim1=0, dim2=1)
         return outputs
