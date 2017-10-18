@@ -746,7 +746,7 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
                                                         axis=0)
                     ####
                     # GCN: we add an empty list as padding
-                    self.data_src_graphs[i] = np.concatenate((self.data_src_graphs[i], self.data_src_graphs[i][random_indices, :, :, :]),
+                    self.data_src_graphs[i] = np.concatenate((self.data_src_graphs[i], self.data_src_graphs[i][random_indices, :, :]),
                                                          axis=0)
                     ####
                     #logger.info('Shapes after replication')
@@ -757,14 +757,14 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
         """
         Graph information is in the form of an adjacency list.
         We convert this to an adjacency matrix in NumPy format.
-        TODO: extend this to tensors using label information.
+        The matrix contains label ids.
         """
         batch_size = len(data_src_graphs)
         #logger.info("BUCKET SIZE: %d", bucket_size)
-        new_src_graphs = np.array([np.zeros((self.edge_vocab_size, bucket_size, bucket_size)) for sent in range(batch_size)])
+        new_src_graphs = np.array([np.zeros((bucket_size, bucket_size)) for sent in range(batch_size)])
         for i, graph in enumerate(data_src_graphs):
             for tup in graph:
-                new_src_graphs[i][tup[2]][tup[0]][tup[1]] = 1.0
+                new_src_graphs[i][tup[0]][tup[1]] = tup[2]
         return new_src_graphs
         
     def reset(self):
