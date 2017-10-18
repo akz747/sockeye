@@ -108,7 +108,7 @@ class GCNCell(object):
             # convolution
             label_id = i + 1
             mask = mx.symbol.ones_like(adj) * label_id
-            adji = (mask == adj) / label_id
+            adji = (mask == adj)
             #adji = mx.symbol.slice_axis(adj, axis=1, begin=i, end=i+1)
             #adji = mx.symbol.reshape(adji, shape=(-1, seq_len, seq_len))
             output = mx.symbol.batch_dot(adji, output)
