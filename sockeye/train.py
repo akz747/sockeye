@@ -245,6 +245,7 @@ def main():
                                                  smoothed_cross_entropy_alpha=args.smoothed_cross_entropy_alpha,
                                                  use_gcn=args.use_gcn,
                                                  use_gcn_gating=args.use_gcn_gating,
+                                                 gcn_residual=args.gcn_residual,
                                                  gcn_num_layers=args.gcn_num_layers,
                                                  skip_rnn=args.skip_rnn,
                                                  gcn_num_hidden=args.gcn_num_hidden,

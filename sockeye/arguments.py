@@ -219,6 +219,8 @@ def add_model_parameters(params):
                               help="Put a GCN layer on top of the encoder. Default: %(default)s")
     model_params.add_argument('--use-gcn-gating', action="store_true",
                               help="Activate edge gating for the GCN encoder (use only with --use-gcn). Default: %(default)s")
+    model_params.add_argument('--gcn-residual', action="store_true",
+                              help="Activate residual connections between GCN layers. Ignored if GCN layers < 2")
     model_params.add_argument('--gcn-num-layers', type=int_greater_or_equal(1),
                               default=1,
                               help='Number of layers for GCN encoder (use only with --use-gcn). Default: %(default)s.')

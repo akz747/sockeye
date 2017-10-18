@@ -37,6 +37,7 @@ def get_encoder(num_embed: int,
                 dropout: float,
                 use_gcn: bool,
                 use_gcn_gating: bool,
+                gcn_residual: bool,
                 gcn_num_layers: int,
                 skip_rnn: bool,
                 gcn_num_hidden: int,
@@ -93,18 +94,21 @@ def get_encoder(num_embed: int,
     if use_gcn:
         if skip_rnn:
             # GCN encoder on top of an embedding layer
+            # Since this is the first layer we ensure
+            # there is no residual connections here
             encoders.append(GraphConvEncoder(num_embed, gcn_num_hidden, 
                                              gcn_num_tensor, use_gcn_gating,
-                                             dropout))
+                                             dropout, residual=False))
         else:            
             encoders.append(GraphConvEncoder(rnn_num_hidden, gcn_num_hidden, 
                                              gcn_num_tensor, use_gcn_gating,
-                                             dropout))
+                                             dropout, residual=False))
         if gcn_num_layers > 1:
             # TODO: allow different hidden layer sizes.
             for i in range(1, gcn_num_layers):
                 encoders.append(GraphConvEncoder(gcn_num_hidden, gcn_num_hidden, 
-                                                 gcn_num_tensor, use_gcn_gating, 0.0,
+                                                 gcn_num_tensor, use_gcn_gating,
+                                                 dropout, gcn_residual,
                                                  prefix=C.GCN_PREFIX + str(i+1) + '_'))
 
     logger.info(encoders)    
@@ -460,10 +464,12 @@ class GraphConvEncoder(Encoder):
                  tensor_dim: int,
                  use_gcn_gating: bool,
                  dropout: float,
+                 residual: bool = True,
                  prefix: str = C.GCN_PREFIX,
                  layout: str = C.TIME_MAJOR,
                  fused: bool = False):
         self.layout = layout
+        self._residual = residual
         self.fused = fused
         self._num_hidden = output_dim
         self.gcn = sockeye.gcn.get_gcn(input_dim, output_dim, tensor_dim,
@@ -478,6 +484,8 @@ class GraphConvEncoder(Encoder):
         with mx.AttrScope(__layout__=C.BATCH_MAJOR):
             data = mx.sym.swapaxes(data=data, dim1=0, dim2=1)
         outputs = self.gcn.convolve(adj, data, seq_len)
+        if self._residual:
+            outputs = outputs + data
         with mx.AttrScope(__layout__=C.TIME_MAJOR):
             outputs = mx.sym.swapaxes(data=outputs, dim1=0, dim2=1)
         return outputs
