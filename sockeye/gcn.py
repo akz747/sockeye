@@ -101,8 +101,10 @@ class GCNCell(object):
                 gate_val = mx.symbol.Activation(gate_val, act_type='sigmoid')
                 output = mx.symbol.broadcast_mul(output, gate_val)
             # convolution
-            adji = mx.symbol.slice_axis(adj, axis=1, begin=i, end=i+1)
-            adji = mx.symbol.reshape(adji, shape=(-1, seq_len, seq_len))
+            mask = mx.symbol.ones_like(adj) * i
+            adji = (mask == adj) / i           
+            #adji = mx.symbol.slice_axis(adj, axis=1, begin=i, end=i+1)
+            #adji = mx.symbol.reshape(adji, shape=(-1, seq_len, seq_len))
             output = mx.symbol.batch_dot(adji, output)
             output = mx.symbol.expand_dims(output, axis=1)
             output_list.append(output)
