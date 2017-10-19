@@ -178,7 +178,7 @@ class InferenceModel(sockeye.model.SockeyeModel):
         return [mx.io.DataDesc(name=C.SOURCE_NAME, shape=(1, max_input_length), layout=C.BATCH_MAJOR),
                 mx.io.DataDesc(name=C.SOURCE_LENGTH_NAME, shape=(1,), layout=C.BATCH_MAJOR),
                 mx.io.DataDesc(name=C.SOURCE_GRAPHS_NAME, 
-                               shape=(1, tensor_dim, max_input_length, max_input_length), 
+                               shape=(1, max_input_length, max_input_length), 
                                layout=C.BATCH_MAJOR)]
 
     def _get_decoder_data_shapes(self, input_length) -> List[mx.io.DataDesc]:
@@ -253,7 +253,7 @@ class InferenceModel(sockeye.model.SockeyeModel):
                        layout=C.BATCH_MAJOR),
         mx.io.DataDesc(name=C.SOURCE_LENGTH_NAME, shape=(self.encoder_batch_size,),
                        layout=C.BATCH_MAJOR),
-        mx.io.DataDesc(name=C.SOURCE_GRAPHS_NAME, shape=(self.encoder_batch_size, self.tensor_dim,
+        mx.io.DataDesc(name=C.SOURCE_GRAPHS_NAME, shape=(self.encoder_batch_size,
                                                          bucket_key, bucket_key),
                        layout=C.BATCH_MAJOR)])
 
@@ -496,11 +496,12 @@ class Translator:
 
         ########
         # GCN
-        new_graph = mx.nd.zeros((1, self.edge_vocab_size, bucket_key, bucket_key))
+        new_graph = mx.nd.zeros((1, bucket_key, bucket_key))
         for tup in graph:
             if (tup[0] < bucket_key) and (tup[1] < bucket_key):
                 # Stripping for graphs as well
-                new_graph[0][tup[2]][tup[0]][tup[1]] = 1.0
+                #new_graph[0][tup[2]][tup[0]][tup[1]] = 1.0
+                new_graph[0][tup[0]][tup[1]] = tup[2] + 1
         ########
         return source, length, new_graph, bucket_key
 
