@@ -210,7 +210,7 @@ class InferenceModel(model.SockeyeModel):
                                shape=(self.encoder_batch_size, bucket_key),
                                layout=C.BATCH_MAJOR),
                 mx.io.DataDesc(name=C.SOURCE_GRAPHS_NAME, 
-                               shape=(self.encoder_batch_size, tensor_dim, bucket_key, bucket_key),
+                               shape=(self.encoder_batch_size, bucket_key, bucket_key),
                                layout=C.BATCH_MAJOR)]
 
 
@@ -702,11 +702,12 @@ class Translator:
 
         ########
         # GCN
-        new_graph = mx.nd.zeros((1, self.edge_vocab_size, bucket_key, bucket_key))
+        new_graph = mx.nd.zeros((1, bucket_key, bucket_key))
         for tup in graph:
             if (tup[0] < bucket_key) and (tup[1] < bucket_key):
                 # Stripping for graphs as well
-                new_graph[0][tup[2]][tup[0]][tup[1]] = 1.0
+                #new_graph[0][tup[2]][tup[0]][tup[1]] = 1.0
+                new_graph[0][tup[0]][tup[1]] = tup[2] + 1
         ########
 
         return source, new_graph, bucket_key
