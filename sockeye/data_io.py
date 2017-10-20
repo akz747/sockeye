@@ -142,15 +142,15 @@ def length_statistics(source_sentences: List[List[Any]], target_sentences: List[
     return mean, std
 
 
-def get_training_data_iters(source: str, target: str,
+def get_training_data_iters(source: str, target: str, source_graphs:str,
                             validation_source: str, validation_target: str,
-                            source_graphs: str, val_source_graphs: str,
+                            val_source_graphs: str,
                             vocab_source: Dict[str, int],
                             vocab_target: Dict[str, int],
-                            vocab_edges: Dict[str, int],
+                            vocab_edge: Dict[str, int],
                             vocab_source_path: Optional[str],
                             vocab_target_path: Optional[str],
-                            vocab_metadata_path: Optional[str],
+                            vocab_edge_path: Optional[str],
                             batch_size: int,
                             batch_by_words: bool,
                             batch_num_devices: int,
@@ -166,16 +166,16 @@ def get_training_data_iters(source: str, target: str,
 
     :param source: Path to source training data.
     :param target: Path to target training data.
+    :param source_graphs: Path to source training graphs.
     :param validation_source: Path to source validation data.
     :param validation_target: Path to target validation data.
-    :param source_graphs: Path to source training graphs.
     :param val_source_graphs: Path to source validation graphs.
     :param vocab_source: Source vocabulary.
     :param vocab_target: Target vocabulary.
-    :param vocab_edges: Graph edges vocabulary.
+    :param vocab_edge: Graph edges vocabulary.
     :param vocab_source_path: Path to source vocabulary.
     :param vocab_target_path: Path to target vocabulary.
-    :param vocab_metadata_path: Path to metadata vocabulary.
+    :param vocab_edge_path: Path to metadata vocabulary.
     :param batch_size: Batch size.
     :param batch_by_words: Size batches by words rather than sentences.
     :param batch_num_devices: Number of devices batches will be parallelized across.
@@ -192,9 +192,10 @@ def get_training_data_iters(source: str, target: str,
      train_target_sentences,
      train_source_graphs) = read_parallel_corpus(source,
                                                  target,
-                                                 source_graph,
+                                                 source_graphs,
                                                  vocab_source,
-                                                 vocab_target)
+                                                 vocab_target,
+                                                 vocab_edge)
 
     max_observed_source_len = max((len(s) for s in train_source_sentences if len(s) <= max_seq_len_source), default=0)
     max_observed_target_len = max((len(t) for t in train_target_sentences if len(t) <= max_seq_len_target), default=0)
@@ -228,8 +229,10 @@ def get_training_data_iters(source: str, target: str,
      val_target_sentences,
      val_source_graphs) = read_parallel_corpus(validation_source,
                                                validation_target,
+                                               val_source_graphs,
                                                vocab_source,
-                                               vocab_target)
+                                               vocab_target,
+                                               vocab_edge)
     val_iter = ParallelBucketSentenceIter(val_source_sentences,
                                           val_target_sentences,
                                           val_source_graphs,
@@ -243,10 +246,11 @@ def get_training_data_iters(source: str, target: str,
                                           bucket_batch_sizes=train_iter.bucket_batch_sizes,
                                           fill_up=fill_up)
 
-    config_data = DataConfig(source, target,
+    config_data = DataConfig(source, target, source_graphs,
                              validation_source, validation_target,
-                             source_graph, val_source_graph,
+                             val_source_graphs,
                              vocab_source_path, vocab_target_path,
+                             vocab_edge_path,
                              lr_mean, lr_std, max_observed_source_len, max_observed_target_len)
 
     return train_iter, val_iter, config_data
@@ -267,12 +271,13 @@ class DataConfig(config.Config):
     def __init__(self,
                  source: str,
                  target: str,
+                 source_graphs: str,
                  validation_source: str,
                  validation_target: str,
-                 source_graph: str,
-                 val_source_graph: str,
+                 val_source_graphs: str,
                  vocab_source: Optional[str],
                  vocab_target: Optional[str],
+                 vocab_edge: Optional[str],
                  length_ratio_mean: float = C.TARGET_MAX_LENGTH_FACTOR,
                  length_ratio_std: float = 0.0,
                  max_observed_source_seq_len: Optional[int] = None,
@@ -280,12 +285,13 @@ class DataConfig(config.Config):
         super().__init__()
         self.source = source
         self.target = target
+        self.source_graphs = source_graphs
         self.validation_source = validation_source
         self.validation_target = validation_target
-        self.source_graph = source_graph
-        self.val_source_graph = val_source_graph
+        self.val_source_graphs = val_source_graphs
         self.vocab_source = vocab_source
         self.vocab_target = vocab_target
+        self.vocab_edge = vocab_edge
         self.length_ratio_mean = length_ratio_mean
         self.length_ratio_std = length_ratio_std
         self.max_observed_source_seq_len = max_observed_source_seq_len
@@ -483,7 +489,7 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
                  batch_size: int,
                  batch_by_words: bool,
                  batch_num_devices: int,
-                 edge_vocab_size: int,
+                 #edge_vocab_size: int,
                  eos_id: int,
                  pad_id: int,
                  unk_id: int,
@@ -502,7 +508,7 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
         self.batch_size = batch_size
         self.batch_by_words = batch_by_words
         self.batch_num_devices = batch_num_devices
-        self.edge_vocab_size = edge_vocab_size
+        #self.edge_vocab_size = edge_vocab_size
         self.eos_id = eos_id
         self.pad_id = pad_id
         self.unk_id = unk_id

@@ -219,7 +219,8 @@ def load_or_create_vocabs(args: argparse.Namespace, resume_training: bool, outpu
 
 def create_data_iters(args: argparse.Namespace,
                       vocab_source: Dict,
-                      vocab_target: Dict) -> Tuple['data_io.ParallelBucketSentenceIter',
+                      vocab_target: Dict,
+                      vocab_edge: Dict) -> Tuple['data_io.ParallelBucketSentenceIter',
                                                    'data_io.ParallelBucketSentenceIter',
                                                    'data_io.DataConfig']:
     """
@@ -228,20 +229,26 @@ def create_data_iters(args: argparse.Namespace,
     :param args: Arguments as returned by argparse.
     :param vocab_source: The source vocabulary.
     :param vocab_target: The target vocabulary.
+    :param vocab_edge: Vocabulary for edge labels.
     :return: The data iterators (train, validation, config_data).
     """
     max_seq_len_source, max_seq_len_target = args.max_seq_len
     batch_num_devices = 1 if args.use_cpu else sum(-di if di < 0 else 1 for di in args.device_ids)
     return data_io.get_training_data_iters(source=os.path.abspath(args.source),
                                            target=os.path.abspath(args.target),
+                                           source_graphs=os.path.abspath(args.source_graphs),
                                            validation_source=os.path.abspath(
                                                args.validation_source),
                                            validation_target=os.path.abspath(
                                                args.validation_target),
+                                           val_source_graphs=os.path.abspath(
+                                               args.val_source_graphs),
                                            vocab_source=vocab_source,
                                            vocab_target=vocab_target,
+                                           vocab_edge=vocab_edge,
                                            vocab_source_path=args.source_vocab,
                                            vocab_target_path=args.target_vocab,
+                                           vocab_edge_path=args.edge_vocab,
                                            batch_size=args.batch_size,
                                            batch_by_words=args.batch_type == C.BATCH_TYPE_WORD,
                                            batch_num_devices=batch_num_devices,
@@ -629,13 +636,13 @@ def main():
         ###########
         # GCN
         # For now we assume graph vocab is built externally
-        vocab_edges = _build_or_load_vocab(args.edge_vocab, args.source_graphs, args.num_words, args.word_min_count)
-        sockeye.vocab.vocab_to_json(vocab_edges, os.path.join(output_folder, C.VOCAB_MD_NAME) + C.JSON_SUFFIX)
-        vocab_edges_size = len(vocab_edges)
+        vocab_edge = _build_or_load_vocab(args.edge_vocab, args.source_graphs, args.num_words, args.word_min_count)
+        vocab.vocab_to_json(vocab_edge, os.path.join(output_folder, C.VOCAB_MD_NAME) + C.JSON_SUFFIX)
+        vocab_edge_size = len(vocab_edge)
         ###########
 
         train_iter, eval_iter, config_data = create_data_iters(args, vocab_source, vocab_target,
-                                                               vocab_metadata)
+                                                               vocab_edge)
         lr_scheduler_instance = create_lr_scheduler(args, resume_training, training_state_dir)
 
         model_config = create_model_config(args, vocab_source_size, vocab_target_size, config_data)
