@@ -120,7 +120,6 @@ class GraphConvEncoderConfig(Config):
                  vocab_size: int,
                  num_embed: int,
                  embed_dropout: float,
-                 max_seq_len_source: int,
                  gcn_config: gcn.GCNConfig,
                  num_layers: int) -> None:
         super().__init__()
@@ -129,7 +128,6 @@ class GraphConvEncoderConfig(Config):
         self.embed_dropout = embed_dropout
         self.num_layers = num_layers
         self.gcn_config = gcn_config
-        self.max_seq_len_source = max_seq_len_source
 
     
 def get_recurrent_encoder(config: RecurrentEncoderConfig, fused: bool,
@@ -258,8 +256,19 @@ def get_gcn_encoder(config: GraphConvEncoderConfig,
                               prefix=C.SOURCE_EMBEDDING_PREFIX,
                               dropout=config.embed_dropout,
                               embed_weight=embed_weight))
-
-    encoders.append(GraphConvEncoder(config=config))
+    new_config = config.gcn_config
+    for i in range(config.num_layers):
+        encoders.append(GraphConvEncoder(config=new_config))
+        # This is needed because in multi-layer GCNs we need to ensure
+        # output of l-1 is the same dim as input l.
+        new_config = gcn.GCNConfig(input_dim=config.gcn_config.output_dim,
+                                   output_dim=config.gcn_config.output_dim,
+                                   tensor_dim=config.gcn_config.tensor_dim,
+                                   activation=config.gcn_config.activation,
+                                   add_gate=config.gcn_config.add_gate,
+                                   dropout=config.gcn_config.dropout,
+                                   residual=config.gcn_config.residual)
+        break
     encoders.append(BatchMajor2TimeMajor())
 
     logger.info(encoders)    
@@ -1133,21 +1142,27 @@ class GraphConvEncoder(Encoder):
     """
 
     def __init__(self,
-                 input_dim: int,
-                 output_dim: int,
-                 tensor_dim: int,
-                 use_gcn_gating: bool,
-                 dropout: float,
-                 residual: bool = True,
-                 prefix: str = C.GCN_PREFIX,
-                 layout: str = C.TIME_MAJOR,
-                 fused: bool = False):
-        self.layout = layout
-        self._residual = residual
-        self.fused = fused
-        self._num_hidden = output_dim
-        self.gcn = sockeye.gcn.get_gcn(input_dim, output_dim, tensor_dim,
-                                       use_gcn_gating, dropout, prefix)
+                 config: gcn.GCNConfig,
+                 prefix: str = C.GCN_PREFIX):
+        self._gcn = gcn.get_gcn(config, prefix)
+        self._residual = config.residual
+        self._num_hidden = config.output_dim
+        
+#    input_dim: int,
+#                 output_dim: int,
+#                 tensor_dim: int,
+#                 use_gcn_gating: bool,
+#                 dropout: float,
+#                 residual: bool = True,
+#                 prefix: str = C.GCN_PREFIX,
+#                 layout: str = C.TIME_MAJOR,
+#                 fused: bool = False):
+#        self.layout = layout
+#        self._residual = residual
+#        self.fused = fused
+#        self._num_hidden = output_dim
+#        self.gcn = sockeye.gcn.get_gcn(input_dim, output_dim, tensor_dim,
+#                                       use_gcn_gating, dropout, prefix)
 
     def encode(self,
                data: mx.sym.Symbol, 
@@ -1158,14 +1173,14 @@ class GraphConvEncoder(Encoder):
         Convolve data using adj and the GCN parameters
         """
         adj = metadata
-        with mx.AttrScope(__layout__=C.BATCH_MAJOR):
-            data = mx.sym.swapaxes(data=data, dim1=0, dim2=1)
-        outputs = self.gcn.convolve(adj, data, seq_len)
+        #with mx.AttrScope(__layout__=C.BATCH_MAJOR):
+        #    data = mx.sym.swapaxes(data=data, dim1=0, dim2=1)
+        outputs = self._gcn.convolve(adj, data, seq_len)
         if self._residual:
             outputs = outputs + data
-        with mx.AttrScope(__layout__=C.TIME_MAJOR):
-            outputs = mx.sym.swapaxes(data=outputs, dim1=0, dim2=1)
-        return outputs
+        #with mx.AttrScope(__layout__=C.TIME_MAJOR):
+        #    outputs = mx.sym.swapaxes(data=outputs, dim1=0, dim2=1)
+        return outputs, data_length, seq_len
 
     def get_num_hidden(self) -> int:
         """

@@ -9,11 +9,20 @@ import sockeye.constants as C
 from sockeye.config import Config
 
 
-def get_gcn(input_dim: int, output_dim: int, 
-            tensor_dim: int, use_gcn_gating: bool, 
-            dropout: float, prefix: str):
-    gcn = GCNCell(input_dim, output_dim, tensor_dim, add_gate=use_gcn_gating,
-                  dropout=dropout, prefix=prefix)
+import logging
+logger = logging.getLogger(__name__)
+
+
+#def get_gcn(input_dim: int, output_dim: int, 
+#            tensor_dim: int, use_gcn_gating: bool, 
+#            dropout: float, prefix: str):
+def get_gcn(config, prefix):
+    gcn = GCNCell(config.input_dim,
+                  config.output_dim,
+                  config.tensor_dim,
+                  add_gate=config.add_gate,
+                  dropout=config.dropout,
+                  prefix=prefix)
     return gcn
    
 
@@ -96,6 +105,8 @@ class GCNCell(object):
         self._input_dim = input_dim
         self._output_dim = output_dim
         self._tensor_dim = tensor_dim
+        logger.info(input_dim)
+        logger.info(output_dim)
         self._add_gate = add_gate        
         self._prefix = prefix
         self._params = params
@@ -130,7 +141,7 @@ class GCNCell(object):
             Wi = self._W[i]
             bi = self._b[i]            
             output = mx.symbol.dot(inputs, Wi)
-            output = mx.symbol.broadcast_add(output, bi)
+            output = mx.symbol.broadcast_add(output, bi, name='gcn_add')
             # optional gating
             if self._add_gate:
                 gate_Wi = self._gate_W[i]
