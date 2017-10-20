@@ -29,8 +29,8 @@ from . import rnn
 from . import convolution
 from . import transformer
 from . import utils
+from . import gcn
 
-import sockeye.gcn
 
 logger = logging.getLogger(__name__)
 
@@ -121,7 +121,7 @@ class GraphConvEncoderConfig(Config):
                  num_embed: int,
                  embed_dropout: float,
                  max_seq_len_source: int,
-                 gcn_config: gcn.GraphConvConfig,
+                 gcn_config: gcn.GCNConfig,
                  num_layers: int) -> None:
         super().__init__()
         self.vocab_size = vocab_size

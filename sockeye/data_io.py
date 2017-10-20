@@ -377,8 +377,6 @@ def read_sentences(path: str, vocab: Dict[str, int], add_bos=False, limit=None) 
     return sentences
 
 
-<<<<<<< 6bc3628762029409e89b58fc91c6dc1aa6e03ec7
-<<<<<<< f1e07a95fd589f20bca54a8292b4c8cd735cb66b
 def get_default_bucket_key(buckets: List[Tuple[int, int]]) -> Tuple[int, int]:
     """
     Returns the default bucket from a list of buckets, i.e. the largest bucket.

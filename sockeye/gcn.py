@@ -4,7 +4,10 @@ Trying to follow the structure of rnn_cell.py in the mxnet code.
 """
 
 import mxnet as mx
+
 import sockeye.constants as C
+from sockeye.config import Config
+
 
 def get_gcn(input_dim: int, output_dim: int, 
             tensor_dim: int, use_gcn_gating: bool, 
@@ -43,8 +46,39 @@ class GCNParams(object):
         if name not in self._params:
             self._params[name] = mx.sym.Variable(name, **kwargs)
         return self._params[name]
-    
 
+
+class GCNConfig(Config):
+    """
+    GCN configuration.
+
+    :param input_dim: Dimensionality for input vectors.
+    :param output_dim: Dimensionality for output vectors.
+    :param tensor_dim: Edge label space dimensionality.
+    :param activation: Non-linear function used inside the GCN updates.
+    :param add_gate: Add edge-wise gating (Marcheggiani & Titov, 2017).
+    :param dropout: Add dropout to the output vectors.
+    :param residual: Add residual connections between multi-layered GCNs.
+    """
+
+    def __init__(self,
+                 input_dim: int,
+                 output_dim: int,
+                 tensor_dim: int,
+                 activation: str = 'relu',
+                 add_gate: bool = False,
+                 dropout: float = 0.0,
+                 residual: bool = False) -> None:
+        super().__init__()
+        self.input_dim = input_dim
+        self.output_dim = output_dim
+        self.tensor_dim = tensor_dim
+        self.activation = activation
+        self.add_gate = add_gate
+        self.dropout = dropout
+        self.residual = residual
+        
+                 
 class GCNCell(object):
     """GCN cell
     """
