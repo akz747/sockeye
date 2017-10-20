@@ -279,8 +279,7 @@ def get_gcn_encoder(config: GraphConvEncoderConfig,
                                    add_gate=config.gcn_config.add_gate,
                                    dropout=config.gcn_config.dropout,
                                    residual=config.gcn_config.residual)
-
-    logger.info(encoders)    
+        
     return EncoderSequence(encoders)
 
 

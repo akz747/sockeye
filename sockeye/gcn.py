@@ -105,8 +105,6 @@ class GCNCell(object):
         self._input_dim = input_dim
         self._output_dim = output_dim
         self._tensor_dim = tensor_dim
-        logger.info(input_dim)
-        logger.info(output_dim)
         self._add_gate = add_gate        
         self._prefix = prefix
         self._params = params
