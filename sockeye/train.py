@@ -387,6 +387,7 @@ def create_decoder_config(args: argparse.Namespace, vocab_target_size: int, enco
 
     :param args: Arguments as returned by argparse.
     :param vocab_target_size: The size of the target vocabulary.
+    :param encoder_num_hidden: The output dimensionality of the encoder.
     :return: The config for the decoder.
     """
     _, decoder_num_layers = args.num_layers
@@ -438,6 +439,7 @@ def create_decoder_config(args: argparse.Namespace, vocab_target_size: int, enco
                                                             hidden_dropout=args.cnn_hidden_dropout)
 
     else:
+        #rnn_attention_num_hidden = encoder_num_hidden
         rnn_attention_num_hidden = args.rnn_num_hidden if args.rnn_attention_num_hidden is None else args.rnn_attention_num_hidden
         config_coverage = None
         if args.rnn_attention_type == C.ATT_COV:

@@ -141,8 +141,8 @@ class GCNCell(object):
             Wi = self._W[i]
             bi = self._b[i]            
             output = mx.symbol.dot(inputs, Wi)
-            output = mx.symbol.broadcast_add(output, bi, name='gcn_add')
-            # optional gating
+            output = mx.symbol.broadcast_add(output, bi)
+            # optional edge gating
             if self._add_gate:
                 gate_Wi = self._gate_W[i]
                 gate_bi = self._gate_b[i]
