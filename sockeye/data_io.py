@@ -227,7 +227,7 @@ def get_training_data_iters(source: str, target: str, source_graphs:str,
     
     (val_source_sentences,
      val_target_sentences,
-     val_source_graphs) = read_parallel_corpus(validation_source,
+     val_src_graphs) = read_parallel_corpus(validation_source,
                                                validation_target,
                                                val_source_graphs,
                                                vocab_source,
@@ -235,7 +235,7 @@ def get_training_data_iters(source: str, target: str, source_graphs:str,
                                                vocab_edge)
     val_iter = ParallelBucketSentenceIter(val_source_sentences,
                                           val_target_sentences,
-                                          val_source_graphs,
+                                          val_src_graphs,
                                           buckets,
                                           batch_size,
                                           batch_by_words,
@@ -252,7 +252,6 @@ def get_training_data_iters(source: str, target: str, source_graphs:str,
                              vocab_source_path, vocab_target_path,
                              vocab_edge_path,
                              lr_mean, lr_std, max_observed_source_len, max_observed_target_len)
-
     return train_iter, val_iter, config_data
 
 #train_iter = get_data_iter(source, target, source_graph, vocab_source, vocab_target, batch_size, fill_up,
