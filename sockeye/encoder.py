@@ -256,7 +256,7 @@ def get_gcn_encoder(config: GraphConvEncoderConfig,
                               prefix=C.SOURCE_EMBEDDING_PREFIX,
                               dropout=config.embed_dropout,
                               embed_weight=embed_weight))
-    encoders.append(BatchMajor2TimeMajor())
+
 
     # This is needed to avoid residual connections in the first layer.
     new_config = gcn.GCNConfig(input_dim=config.gcn_config.input_dim,
@@ -279,7 +279,7 @@ def get_gcn_encoder(config: GraphConvEncoderConfig,
                                    add_gate=config.gcn_config.add_gate,
                                    dropout=config.gcn_config.dropout,
                                    residual=config.gcn_config.residual)
-        
+    encoders.append(BatchMajor2TimeMajor())        
     return EncoderSequence(encoders)
 
 
@@ -1181,13 +1181,13 @@ class GraphConvEncoder(Encoder):
         Convolve data using adj and the GCN parameters
         """
         adj = metadata
-        with mx.AttrScope(__layout__=C.BATCH_MAJOR):
-            data = mx.sym.swapaxes(data=data, dim1=0, dim2=1)
+        #with mx.AttrScope(__layout__=C.BATCH_MAJOR):
+        #    data = mx.sym.swapaxes(data=data, dim1=0, dim2=1)
         outputs = self._gcn.convolve(adj, data, seq_len)
         if self._residual:
             outputs = outputs + data
-        with mx.AttrScope(__layout__=C.TIME_MAJOR):
-            outputs = mx.sym.swapaxes(data=outputs, dim1=0, dim2=1)
+        #with mx.AttrScope(__layout__=C.TIME_MAJOR):
+        #    outputs = mx.sym.swapaxes(data=outputs, dim1=0, dim2=1)
         return outputs, data_length, seq_len
 
     def get_num_hidden(self) -> int:
