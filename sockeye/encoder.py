@@ -321,7 +321,8 @@ class BatchMajor2TimeMajor(Encoder):
     def encode(self,
                data: mx.sym.Symbol,
                data_length: mx.sym.Symbol,
-               seq_len: int) -> Tuple[mx.sym.Symbol, mx.sym.Symbol, int]:
+               seq_len: int,
+               metadata=None) -> Tuple[mx.sym.Symbol, mx.sym.Symbol, int]:
         """
         Encodes data given sequence lengths of individual examples and maximum sequence length.
 
@@ -376,7 +377,8 @@ class Embedding(Encoder):
     def encode(self,
                data: mx.sym.Symbol,
                data_length: Optional[mx.sym.Symbol],
-               seq_len: int) -> Tuple[mx.sym.Symbol, mx.sym.Symbol, int]:
+               seq_len: int,
+               metadata=None) -> Tuple[mx.sym.Symbol, mx.sym.Symbol, int]:
         """
         Encodes data given sequence lengths of individual examples and maximum sequence length.
 
@@ -674,7 +676,8 @@ class RecurrentEncoder(Encoder):
     def encode(self,
                data: mx.sym.Symbol,
                data_length: mx.sym.Symbol,
-               seq_len: int) -> Tuple[mx.sym.Symbol, mx.sym.Symbol, int]:
+               seq_len: int,
+               metadata=None) -> Tuple[mx.sym.Symbol, mx.sym.Symbol, int]:
         """
         Encodes data given sequence lengths of individual examples and maximum sequence length.
 
@@ -760,7 +763,8 @@ class BiDirectionalRNNEncoder(Encoder):
     def encode(self,
                data: mx.sym.Symbol,
                data_length: mx.sym.Symbol,
-               seq_len: int) -> Tuple[mx.sym.Symbol, mx.sym.Symbol, int]:
+               seq_len: int,
+               metadata=None) -> Tuple[mx.sym.Symbol, mx.sym.Symbol, int]:
         """
         Encodes data given sequence lengths of individual examples and maximum sequence length.
 
@@ -1145,8 +1149,11 @@ class GraphConvEncoder(Encoder):
         self.gcn = sockeye.gcn.get_gcn(input_dim, output_dim, tensor_dim,
                                        use_gcn_gating, dropout, prefix)
 
-    def encode(self, data: mx.sym.Symbol, 
-               data_length: mx.sym.Symbol, seq_len: int, metadata=None):
+    def encode(self,
+               data: mx.sym.Symbol, 
+               data_length: mx.sym.Symbol,
+               seq_len: int,
+               metadata=None):
         """
         Convolve data using adj and the GCN parameters
         """

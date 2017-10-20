@@ -502,13 +502,20 @@ def add_model_parameters(params):
 
     model_params.add_argument('--use-gcn', action="store_true",
                               help="Put a GCN layer on top of the encoder. Default: %(default)s")
-    model_params.add_argument('--use-gcn-gating', action="store_true",
+    model_params.add_argument('--gcn-edge-gating', action="store_true",
                               help="Activate edge gating for the GCN encoder (use only with --use-gcn). Default: %(default)s")
     model_params.add_argument('--gcn-residual', action="store_true",
                               help="Activate residual connections between GCN layers. Ignored if GCN layers < 2")
     model_params.add_argument('--gcn-num-layers', type=int_greater_or_equal(1),
                               default=1,
-                              help='Number of layers for GCN encoder (use only with --use-gcn). Default: %(default)s.')
+                              help="Number of layers for GCN encoder (use only with --use-gcn). Default: %(default)s.")
+    model_params.add_argument('--gcn-activation', type=str,
+                              default='relu',
+                              help="Activation function to be used inside the GCN convolutions")
+    model_params.add_argument('--gcn-dropout', type=float,
+                              default=0.0,
+                              help="Dropout rate on the GCN output vectors.")
+
     #TODO: enable 0 layers for RNN so we can delete this flag.
     model_params.add_argument('--skip-rnn', action="store_true",
                               help="Do not use RNNs, put the GCN directly on top of the word embeddings (use only with --use-gcn). Default: %(default)s",)

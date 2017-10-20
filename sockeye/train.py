@@ -46,6 +46,7 @@ from . import training
 from . import transformer
 from . import utils
 from . import vocab
+from . import gcn
 
 # Temporary logger, the real one (logging to a file probably, will be created in the main function)
 logger = setup_main_logger(__name__, file_logging=False, console=True)
@@ -286,6 +287,7 @@ def create_lr_scheduler(args: argparse.Namespace, resume_training: bool,
 
 
 def create_encoder_config(args: argparse.Namespace, vocab_source_size: int,
+                          vocab_edge_size: int,
                           config_conv: Optional[encoder.ConvolutionalEmbeddingConfig]) -> Tuple[Config, int]:
     """
     Create the encoder config.
@@ -336,6 +338,22 @@ def create_encoder_config(args: argparse.Namespace, vocab_source_size: int,
                                                             positional_embedding_type=args.cnn_positional_embedding_type)
 
         encoder_num_hidden = args.cnn_num_hidden
+    elif args.use_gcn:
+        num_embed_source, _ = args.num_embed
+        encoder_embed_dropout, _ = args.embed_dropout
+        config_encoder = encoder.GraphConvEncoderConfig(
+            vocab_size=vocab_source_size,
+            num_embed=num_embed_source,
+            embed_dropout=encoder_embed_dropout,
+            gcn_config=gcn.GCNConfig(input_dim=num_embed_source,
+                                     output_dim=args.gcn_num_hidden,
+                                     tensor_dim=vocab_edge_size,
+                                     activation=args.gcn_activation,
+                                     add_gate=args.gcn_edge_gating,
+                                     dropout=args.gcn_dropout,
+                                     residual=args.gcn_residual),
+            )
+        encoder_num_hidden=args.gcn_num_hidden
     else:
         num_embed_source, _ = args.num_embed
         encoder_embed_dropout, _ = args.embed_dropout
@@ -488,6 +506,7 @@ def check_encoder_decoder_args(args) -> None:
 
 def create_model_config(args: argparse.Namespace,
                         vocab_source_size: int, vocab_target_size: int,
+                        vocab_edge_size: int,
                         config_data: data_io.DataConfig) -> model.ModelConfig:
     """
     Create a ModelConfig from the argument given in the command line.
@@ -511,7 +530,10 @@ def create_model_config(args: argparse.Namespace,
                                                            num_highway_layers=args.conv_embed_num_highway_layers,
                                                            dropout=args.conv_embed_dropout)
 
-    config_encoder, encoder_num_hidden = create_encoder_config(args, vocab_source_size, config_conv)
+    config_encoder, encoder_num_hidden = create_encoder_config(args,
+                                                               vocab_source_size,
+                                                               vocab_edge_size,
+                                                               config_conv)
     config_decoder = create_decoder_config(args, vocab_target_size, encoder_num_hidden)
 
     config_loss = loss.LossConfig(name=args.loss,
@@ -645,7 +667,10 @@ def main():
                                                                vocab_edge)
         lr_scheduler_instance = create_lr_scheduler(args, resume_training, training_state_dir)
 
-        model_config = create_model_config(args, vocab_source_size, vocab_target_size, config_data)
+        model_config = create_model_config(args, vocab_source_size,
+                                           vocab_target_size,
+                                           vocab_edge_size,
+                                           config_data)
         model_config.freeze()
 
         training_model = create_training_model(model_config, args,

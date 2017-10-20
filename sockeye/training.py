@@ -105,6 +105,7 @@ class TrainingModel(model.SockeyeModel):
         model_loss = loss.get_loss(self.config.config_loss)
 
         data_names = [x[0] for x in train_iter.provide_data]
+        #logger.info(data_names)
         label_names = [x[0] for x in train_iter.provide_label]
 
         def sym_gen(seq_lens):
@@ -118,7 +119,9 @@ class TrainingModel(model.SockeyeModel):
              source_encoded_length,
              source_encoded_seq_len) = self.encoder.encode(source, source_length,
                                                            seq_len=source_seq_len,
-                                                           metadata=src_graph)
+                                                           metadata=source_graphs)
+
+            logger.info(self.encoder.encoders)
 
             source_lexicon = self.lexicon.lookup(source) if self.lexicon else None
 
@@ -127,6 +130,8 @@ class TrainingModel(model.SockeyeModel):
 
             outputs = model_loss.get_loss(logits, labels)
 
+            logger.info(data_names)
+            logger.info(label_names)
             return mx.sym.Group(outputs), data_names, label_names
 
         if self.bucketing:

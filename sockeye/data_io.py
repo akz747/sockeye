@@ -563,6 +563,8 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
 
         self.data_names = [self.source_data_name, self.target_data_name, self.src_graphs_name]
         self.label_names = [self.label_name]
+        logger.info(self.data_names)
+        logger.info(self.label_names)
 
         # create index tuples (i,j) into buckets: i := bucket index ; j := row index of bucket array
         self.idx = []  # type: List[Tuple[int, int]]
