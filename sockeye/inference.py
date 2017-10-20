@@ -199,7 +199,7 @@ class InferenceModel(model.SockeyeModel):
                                         context=self.context)
         return module, default_bucket_key
 
-    def _get_encoder_data_shapes(self, bucket_key: int, tensor_dim: int) -> List[mx.io.DataDesc]:
+    def _get_encoder_data_shapes(self, bucket_key: int) -> List[mx.io.DataDesc]:
         """
         Returns data shapes of the encoder module.
 
@@ -232,8 +232,8 @@ class InferenceModel(model.SockeyeModel):
 
     def run_encoder(self,
                     source: mx.nd.NDArray,
-                    source_graph: mx.nd.NDArray,
-                    source_max_length: int) -> List[mx.nd.NDArray]:
+                    source_max_length: int,
+                    source_graph: mx.nd.NDArray) -> List[mx.nd.NDArray]:
         """
         Runs forward pass of the encoder.
         Encodes source given source length and bucket key.
@@ -324,11 +324,11 @@ def load_models(context: mx.context.Context,
                 max_input_len: Optional[int],
                 beam_size: int,
                 model_folders: List[str],
-                edge_vocab_size: int,
+                edge_vocab: Dict[str, int],
                 checkpoints: Optional[List[int]] = None,
                 softmax_temperature: Optional[float] = None,
                 max_output_length_num_stds: int = C.DEFAULT_NUM_STD_MAX_OUTPUT_LENGTH) \
-        -> Tuple[List[InferenceModel], Dict[str, int], Dict[str, int]]:
+        -> Tuple[List[InferenceModel], Dict[str, int], Dict[str, int], Dict[str, int]]:
     """
     Loads a list of models for inference.
 
@@ -352,6 +352,7 @@ def load_models(context: mx.context.Context,
         model = InferenceModel(model_folder=model_folder,
                                context=context,
                                fused=False,
+                               edge_vocab_size=len(edge_vocab),
                                beam_size=beam_size,
                                softmax_temperature=softmax_temperature,
                                checkpoint=checkpoint)                               
@@ -370,7 +371,7 @@ def load_models(context: mx.context.Context,
     for model in models:
         model.initialize(max_input_len, get_max_output_length)
 
-    return models, source_vocabs[0], target_vocabs[0]
+    return models, source_vocabs[0], target_vocabs[0], edge_vocab
 
 
 def get_max_input_output_length(models: List[InferenceModel], num_stds: int,
@@ -587,16 +588,16 @@ class Translator:
                  bucket_source_width: int,
                  bucket_target_width: int,
                  length_penalty: LengthPenalty,
-                 edge_vocab_size: int,
                  models: List[InferenceModel],
                  vocab_source: Dict[str, int],
-                 vocab_target: Dict[str, int]) -> None:
+                 vocab_target: Dict[str, int],
+                 vocab_edge: Dict[str, int]) -> None:
         self.context = context
         self.length_penalty = length_penalty
         self.vocab_source = vocab_source
         self.vocab_target = vocab_target
         self.vocab_target_inv = vocab.reverse_vocab(self.vocab_target)
-        self.edge_vocab_size = edge_vocab_size
+        self.vocab_edge = vocab_edge
         self.start_id = self.vocab_target[C.BOS_SYMBOL]
         self.stop_ids = {self.vocab_target[C.EOS_SYMBOL], C.PAD_ID}  # type: Set[int]
         self.models = models
@@ -673,7 +674,7 @@ class Translator:
                                     tokens=[""],
                                     attention_matrix=np.asarray([[0]]),
                                     score=-np.inf)
-
+        
         if len(trans_input.tokens) > self.max_input_length:
             logger.debug("Input (%d) exceeds max input length (%d). Splitting into chunks of size %d.",
                          len(trans_input.tokens), self.buckets_source[-1], self.max_input_length)
@@ -710,7 +711,7 @@ class Translator:
                 new_graph[0][tup[0]][tup[1]] = tup[2] + 1
         ########
 
-        return source, new_graph, bucket_key
+        return source, bucket_key, new_graph
 
     def _make_result(self,
                      trans_input: TranslatorInput,
@@ -837,12 +838,13 @@ class Translator:
 
         :param source: Source ids. Shape: (1, bucket_key).
         :param source_length: Source length.
-        :param source_graph: Soruce graph.
+        :param source_graph: Source graph.
         :return List of lists of word ids, list of attentions, array of accumulated length-normalized
                 negative log-probs.
         """
         # Length of encoded sequence (may differ from initial input length)
         encoded_source_length = self.models[0].encoder.get_encoded_seq_len(source_length)
+
         utils.check_condition(all(encoded_source_length ==
                                   model.encoder.get_encoded_seq_len(source_length) for model in self.models),
                               "Models must agree on encoded sequence length")

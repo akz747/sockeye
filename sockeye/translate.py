@@ -61,7 +61,6 @@ def main():
         edge_vocab = sockeye.vocab.vocab_from_json(args.edge_vocab)
         translator = sockeye.inference.Translator(context,
                                                   args.ensemble_mode,
-                                                  len(edge_vocab),  # TODO: check this
                                                   bucket_source_width,
                                                   bucket_target_width,
                                                   sockeye.inference.LengthPenalty(args.length_penalty_alpha,
@@ -70,7 +69,7 @@ def main():
                                                                                  args.max_input_len,
                                                                                  args.beam_size,
                                                                                  args.models,
-                                                                                 len(edge_vocab),
+                                                                                 edge_vocab,
                                                                                  args.checkpoints,
                                                                                  args.softmax_temperature,
                                                                                  args.max_output_length_num_stds))
@@ -108,6 +107,7 @@ def translate_lines(output_handler: sockeye.output_handler.OutputHandler, source
     :param output_handler: A handler that will be called once with the output of each translation.
     :param source_data: A enumerable list of source sentences that will be translated.
     :param translator: The translator that will be used for each line of input.
+    :param edge_vocab: Edge label vocabulary for graphs.
     :return: The number of lines translated, and the total time taken.
     """
 
@@ -122,7 +122,7 @@ def translate_lines(output_handler: sockeye.output_handler.OutputHandler, source
         surface, graph = line.split('\t')
         #########
 
-        trans_input = translator.make_input(i, line)
+        trans_input = translator.make_input(i, surface, graph, translator.vocab_edge)
         logger.debug(" IN: %s", trans_input)
         trans_output = translator.translate(trans_input)
         trans_wall_time = time.time() - tic
