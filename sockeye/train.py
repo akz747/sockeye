@@ -47,6 +47,7 @@ from . import transformer
 from . import utils
 from . import vocab
 from . import gcn
+from . import grn
 
 # Temporary logger, the real one (logging to a file probably, will be created in the main function)
 logger = setup_main_logger(__name__, file_logging=False, console=True)
@@ -95,7 +96,7 @@ def check_arg_compatibility(args: argparse.Namespace):
 
     #####
     # GCN
-    if args.use_gcn:
+    if args.use_gcn or args.use_grn:
         assert args.source_graphs is not None, "GCN needs graph inputs for training"
         assert args.val_source_graphs is not None, "GCN needs graph inputs for validation"
         assert args.edge_vocab is not None, "GCN needs an explicit edge vocabulary (in JSON format)"
@@ -355,6 +356,22 @@ def create_encoder_config(args: argparse.Namespace, vocab_source_size: int,
                                      residual=args.gcn_residual),
             )
         encoder_num_hidden=args.gcn_num_hidden
+    elif args.use_grn:
+        num_embed_source, _ = args.num_embed
+        encoder_embed_dropout, _ = args.embed_dropout
+        config_encoder = encoder.ResGraphRecEncoderConfig(
+            vocab_size=vocab_source_size,
+            num_embed=num_embed_source,
+            embed_dropout=encoder_embed_dropout,
+#            num_layers=args.grn_num_layers,
+            resgrn_config=grn.ResGRNConfig(input_dim=num_embed_source,
+                                           output_dim=args.grn_num_hidden,
+                                           tensor_dim=vocab_edge_size,
+                                           num_layers=args.grn_num_layers,
+                                           activation=args.grn_activation,
+                                           add_gate=args.grn_edge_gating),
+            )
+        encoder_num_hidden=args.grn_num_hidden
     else:
         num_embed_source, _ = args.num_embed
         encoder_embed_dropout, _ = args.embed_dropout

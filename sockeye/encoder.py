@@ -30,7 +30,7 @@ from . import convolution
 from . import transformer
 from . import utils
 from . import gcn
-
+from . import grn
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +44,8 @@ def get_encoder(config: Config, fused: bool, embed_weight: Optional[mx.sym.Symbo
         return get_convolutional_encoder(config, embed_weight)
     elif isinstance(config, GraphConvEncoderConfig):
         return get_gcn_encoder(config, embed_weight)
+    elif isinstance(config, ResGraphRecEncoderConfig):
+        return get_resgrn_encoder(config, embed_weight)
     else:
         raise ValueError("Unsupported encoder configuration")
 
@@ -128,6 +130,29 @@ class GraphConvEncoderConfig(Config):
         self.embed_dropout = embed_dropout
         self.num_layers = num_layers
         self.gcn_config = gcn_config
+
+        
+class ResGraphRecEncoderConfig(Config):
+    """
+    Residual Graph Recurrent encoder configuration.
+
+    :param vocab_size: Source vocabulary size.
+    :param num_embed: Size of embedding layer.
+    :param embed_dropout: Dropout probability on embedding layer.
+    :param resgrn_config: ResGRN configuration.
+    :param num_layers: The number of layers on top of the embeddings.
+    """
+    def __init__(self,
+                 vocab_size: int,
+                 num_embed: int,
+                 embed_dropout: float,
+                 resgrn_config: grn.ResGRNConfig) -> None:
+        super().__init__()
+        self.vocab_size = vocab_size
+        self.num_embed = num_embed
+        self.embed_dropout = embed_dropout
+        #self.num_layers = num_layers
+        self.resgrn_config = resgrn_config
 
     
 def get_recurrent_encoder(config: RecurrentEncoderConfig, fused: bool,
@@ -259,6 +284,7 @@ def get_gcn_encoder(config: GraphConvEncoderConfig,
 
 
     # This is needed to avoid residual connections in the first layer.
+    # TODO: put layers as part of the GCN instead.
     new_config = gcn.GCNConfig(input_dim=config.gcn_config.input_dim,
                                output_dim=config.gcn_config.output_dim,
                                tensor_dim=config.gcn_config.tensor_dim,
@@ -281,6 +307,30 @@ def get_gcn_encoder(config: GraphConvEncoderConfig,
                                    residual=config.gcn_config.residual)
     encoders.append(BatchMajor2TimeMajor())        
     return EncoderSequence(encoders)
+
+
+def get_resgrn_encoder(config: ResGraphRecEncoderConfig,
+                       embed_weight: Optional[mx.sym.Symbol] = None) -> 'Encoder':
+    """
+    Creates a residual graph recurrent encoder.
+
+    :param config: Configuration for residual graph recurrent encoder.
+    :param embed_weight: Optionally use an existing embedding matrix instead of creating a new one.
+    :return: Encoder instance.
+    """
+    encoders = list()  # type: List[Encoder]
+    encoders.append(Embedding(num_embed=config.num_embed,
+                              vocab_size=config.vocab_size,
+                              prefix=C.SOURCE_EMBEDDING_PREFIX,
+                              dropout=config.embed_dropout,
+                              embed_weight=embed_weight))
+    
+    encoders.append(ResGraphRecEncoder(config=config.resgrn_config,
+                                       prefix=C.RESGRN_PREFIX))
+
+    encoders.append(BatchMajor2TimeMajor())        
+    return EncoderSequence(encoders)
+
 
 
 class Encoder(ABC):
@@ -1155,22 +1205,6 @@ class GraphConvEncoder(Encoder):
         self._gcn = gcn.get_gcn(config, prefix)
         self._residual = config.residual
         self._num_hidden = config.output_dim
-        
-#    input_dim: int,
-#                 output_dim: int,
-#                 tensor_dim: int,
-#                 use_gcn_gating: bool,
-#                 dropout: float,
-#                 residual: bool = True,
-#                 prefix: str = C.GCN_PREFIX,
-#                 layout: str = C.TIME_MAJOR,
-#                 fused: bool = False):
-#        self.layout = layout
-#        self._residual = residual
-#        self.fused = fused
-#        self._num_hidden = output_dim
-#        self.gcn = sockeye.gcn.get_gcn(input_dim, output_dim, tensor_dim,
-#                                       use_gcn_gating, dropout, prefix)
 
     def encode(self,
                data: mx.sym.Symbol, 
@@ -1188,6 +1222,42 @@ class GraphConvEncoder(Encoder):
             outputs = outputs + data
         #with mx.AttrScope(__layout__=C.TIME_MAJOR):
         #    outputs = mx.sym.swapaxes(data=outputs, dim1=0, dim2=1)
+        return outputs, data_length, seq_len
+
+    def get_num_hidden(self) -> int:
+        """
+        Return the representation size of this encoder.
+        """
+        return self._num_hidden
+
+    def get_rnn_cells(self) -> List[mx.rnn.BaseRNNCell]:
+        """
+        Returns a list of RNNCells used by this encoder.
+        """
+        return []
+
+                    
+class ResGraphRecEncoder(Encoder):
+    """
+    A Residual Graph Recurrent Encoder.
+    """
+
+    def __init__(self,
+                 config: grn.ResGRNConfig,
+                 prefix: str):
+        self._resgrn = grn.get_resgrn(config, prefix)
+        self._num_hidden = config.output_dim
+
+    def encode(self,
+               data: mx.sym.Symbol, 
+               data_length: mx.sym.Symbol,
+               seq_len: int,
+               metadata=None):
+        """
+        Convolve data using adj.
+        """
+        adj = metadata
+        outputs = self._resgrn.convolve(adj, data, seq_len)
         return outputs, data_length, seq_len
 
     def get_num_hidden(self) -> int:

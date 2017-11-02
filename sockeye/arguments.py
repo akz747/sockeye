@@ -527,7 +527,29 @@ def add_model_parameters(params):
     
     #####
     
+    #####
+    # GRN
 
+    model_params.add_argument('--use-grn', action="store_true",
+                              help="Put a GRN layer on top of the encoder. Default: %(default)s")
+    model_params.add_argument('--grn-edge-gating', action="store_true",
+                              help="Activate edge gating for the GRN encoder (use only with --use-grn). Default: %(default)s")
+    model_params.add_argument('--grn-num-layers', type=int_greater_or_equal(1),
+                              default=1,
+                              help="Number of layers for GRN encoder (use only with --use-grn). Default: %(default)s.")
+    model_params.add_argument('--grn-activation', type=str,
+                              default='relu',
+                              help="Activation function to be used inside the GRN convolutions")
+
+    #TODO: add fine grained control of hidden layer sizes when we have multiple GCN layers.
+    model_params.add_argument('--grn-num-hidden',
+                              type=int_greater_or_equal(1),
+                              default=512,
+                              help='Number of GRN hidden units for encoder (use only with --use-grn). Default: %(default)s.')
+    
+    #####
+
+    
 def add_training_args(params):
     train_params = params.add_argument_group("Training parameters")
 
