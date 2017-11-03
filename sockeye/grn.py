@@ -88,7 +88,7 @@ class ResGRNCell(object):
     """Residual GRN cell
     """
     def __init__(self, input_dim, output_dim, tensor_dim, num_layers,
-                 rank=16,
+                 rank=256,
                  add_gate=False,
                  prefix='resgrn_', params=None, 
                  activation='relu',
