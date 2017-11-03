@@ -88,6 +88,7 @@ class ResGRNCell(object):
     """Residual GRN cell
     """
     def __init__(self, input_dim, output_dim, tensor_dim, num_layers,
+                 rank=16,
                  add_gate=False,
                  prefix='resgrn_', params=None, 
                  activation='relu',
@@ -102,21 +103,24 @@ class ResGRNCell(object):
         self._params = params
         self._modified = False
         
-        
         self._input_dim = input_dim
         self._output_dim = output_dim
         self._tensor_dim = tensor_dim
         self._num_layers = num_layers
+        self._rank = rank
+        
         self._add_edge_gate = add_gate        
         self._activation = activation
         #self.reset()
-        
-        self._W = [mx.symbol.Variable(self._prefix + str(i) + '_weight',
-                                      shape=(input_dim, output_dim))
-                                      for i in range(tensor_dim)]
-        self._b = [mx.symbol.Variable(self._prefix + str(i) + '_bias',
-                                      shape=(output_dim,))
-                                      for i in range(tensor_dim)]
+
+        self._W = mx.symbol.Variable(self._prefix + '_weight',
+                                     shape=(input_dim, rank))
+        self._Wl = [mx.symbol.Variable(self._prefix + str(i) + '_edge_weight',
+                                       shape=(rank, output_dim))
+                    for i in range(tensor_dim)]
+        self._bl = [mx.symbol.Variable(self._prefix + str(i) + '_edge_bias',
+                                       shape=(output_dim,))
+                    for i in range(tensor_dim)]
         # Edge gate parameters
         if self._add_edge_gate:
             self._edge_gate_W = [mx.symbol.Variable(self._prefix + str(i) + '_edge_gate_weight',
@@ -144,8 +148,9 @@ class ResGRNCell(object):
         output_list = []
         for i in range(self._tensor_dim):
             # linear transformation
-            Wi = self._W[i]
-            bi = self._b[i]            
+            Wi = self._Wl[i]
+            Wi = mx.symbol.dot(self._W, Wi)
+            bi = self._bl[i]            
             output = mx.symbol.dot(inputs, Wi)
             output = mx.symbol.broadcast_add(output, bi)
             # optional edge gating
