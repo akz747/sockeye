@@ -142,7 +142,7 @@ class ResGRNCell(object):
         #outputs = mx.symbol.FullyConnected(data=inputs, num_hidden=self._output_dim, flatten=True)
         outputs = mx.symbol.dot(inputs, self._first_W)
         #outputs = mx.symbol.concat(inputs, outputs)
-        for i in range(self._num_layers - 1):
+        for i in range(self._num_layers):
             outputs = self._single_convolve(adj, outputs, seq_len) + outputs
         #outputs = mx.symbol.concat(outputs, inputs)
         return outputs
