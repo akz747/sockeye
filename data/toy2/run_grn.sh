@@ -17,6 +17,6 @@ python -m sockeye.train --source data/toy2/train.en.tok \
     --edge-vocab data/toy2/edge_vocab.json \
     --overwrite-output \
     --rnn-attention-num-hidden 18 \
-    --skip-rnn
+#    --skip-rnn
 #    --weight-tying \
 #    --weight-tying-type src_trg_softmax

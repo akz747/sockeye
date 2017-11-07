@@ -113,8 +113,10 @@ class ResGRNCell(object):
         self._activation = activation
         #self.reset()
 
+        self._first_W = mx.symbol.Variable(self._prefix + '_first_weight',
+                                           shape=(input_dim, output_dim))
         self._W = mx.symbol.Variable(self._prefix + '_weight',
-                                     shape=(input_dim, rank))
+                                     shape=(output_dim, rank))
         self._Wl = [mx.symbol.Variable(self._prefix + str(i) + '_edge_weight',
                                        shape=(rank, output_dim))
                     for i in range(tensor_dim)]
@@ -124,7 +126,7 @@ class ResGRNCell(object):
         # Edge gate parameters
         if self._add_edge_gate:
             self._edge_gate_W = [mx.symbol.Variable(self._prefix + str(i) + '_edge_gate_weight',
-                                                    shape=(input_dim, 1))
+                                                    shape=(output_dim, 1))
                                  for i in range(tensor_dim)]
             self._edge_gate_b = [mx.symbol.Variable(self._prefix + str(i) + '_edge_gate_bias',
                                                     shape=(1, 1))
@@ -133,10 +135,16 @@ class ResGRNCell(object):
     def convolve(self, adj, inputs, seq_len):
         """
         Apply one convolution per layer. This is where we add the residuals.
+        A linear transformation is required in case the input dimensionality is
+        different from GRN output dimensionality.
         """
-        outputs = self._single_convolve(adj, inputs, seq_len)
+        #outputs = self._single_convolve(adj, inputs, seq_len)
+        #outputs = mx.symbol.FullyConnected(data=inputs, num_hidden=self._output_dim, flatten=True)
+        outputs = mx.symbol.dot(inputs, self._first_W)
+        #outputs = mx.symbol.concat(inputs, outputs)
         for i in range(self._num_layers - 1):
             outputs = self._single_convolve(adj, outputs, seq_len) + outputs
+        #outputs = mx.symbol.concat(outputs, inputs)
         return outputs
             
     def _single_convolve(self, adj, inputs, seq_len):
