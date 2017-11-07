@@ -146,13 +146,19 @@ class ResGraphRecEncoderConfig(Config):
                  vocab_size: int,
                  num_embed: int,
                  embed_dropout: float,
-                 resgrn_config: grn.ResGRNConfig) -> None:
+                 resgrn_config: grn.ResGRNConfig,
+                 skip_rnn: bool,
+                 rnn_config: rnn.RNNConfig,
+                 reverse_input: bool) -> None:
         super().__init__()
         self.vocab_size = vocab_size
         self.num_embed = num_embed
         self.embed_dropout = embed_dropout
         #self.num_layers = num_layers
         self.resgrn_config = resgrn_config
+        self.skip_rnn = skip_rnn
+        self.rnn_config = rnn_config
+        self.reverse_input = reverse_input
 
     
 def get_recurrent_encoder(config: RecurrentEncoderConfig, fused: bool,
@@ -324,6 +330,22 @@ def get_resgrn_encoder(config: ResGraphRecEncoderConfig,
                               prefix=C.SOURCE_EMBEDDING_PREFIX,
                               dropout=config.embed_dropout,
                               embed_weight=embed_weight))
+    if not config.skip_rnn:
+        encoders.append(BatchMajor2TimeMajor())
+        if config.reverse_input:
+            encoders.append(ReverseSequence())
+
+        if config.rnn_config.residual:
+            utils.check_condition(config.rnn_config.first_residual_layer >= 2,
+                              "Residual connections on the first encoder layer are not supported")
+
+        #encoder_class = FusedRecurrentEncoder if fused else RecurrentEncoder
+        encoder_class = RecurrentEncoder
+        # One layer bi-directional RNN:
+        encoders.append(BiDirectionalRNNEncoder(rnn_config=config.rnn_config.copy(num_layers=1),
+                                                prefix=C.BIDIRECTIONALRNN_PREFIX,
+                                                layout=C.TIME_MAJOR))
+        encoders.append(TimeMajor2BatchMajor())
     
     encoders.append(ResGraphRecEncoder(config=config.resgrn_config,
                                        prefix=C.RESGRN_PREFIX))
@@ -399,6 +421,28 @@ class BatchMajor2TimeMajor(Encoder):
         :return: Encoded versions of input data (data, data_length, seq_len).
         """
         with mx.AttrScope(__layout__=C.TIME_MAJOR):
+            return mx.sym.swapaxes(data=data, dim1=0, dim2=1), data_length, seq_len
+
+        
+class TimeMajor2BatchMajor(Encoder):
+    """
+    Converts time major data to batch major.
+    """
+
+    def encode(self,
+               data: mx.sym.Symbol,
+               data_length: mx.sym.Symbol,
+               seq_len: int,
+               metadata=None) -> Tuple[mx.sym.Symbol, mx.sym.Symbol, int]:
+        """
+        Encodes data given sequence lengths of individual examples and maximum sequence length.
+
+        :param data: Input data.
+        :param data_length: Vector with sequence lengths.
+        :param seq_len: Maximum sequence length.
+        :return: Encoded versions of input data (data, data_length, seq_len).
+        """
+        with mx.AttrScope(__layout__=C.BATCH_MAJOR):
             return mx.sym.swapaxes(data=data, dim1=0, dim2=1), data_length, seq_len
 
 

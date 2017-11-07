@@ -359,17 +359,39 @@ def create_encoder_config(args: argparse.Namespace, vocab_source_size: int,
     elif args.use_grn:
         num_embed_source, _ = args.num_embed
         encoder_embed_dropout, _ = args.embed_dropout
+        logger.info("SKIP RNN? %s" % str(args.skip_rnn))
+        if not args.skip_rnn:
+            encoder_rnn_dropout_inputs, _ = args.rnn_dropout_inputs
+            encoder_rnn_dropout_states, _ = args.rnn_dropout_states
+            encoder_rnn_dropout_recurrent, _ = args.rnn_dropout_recurrent
+            grn_input_dim = args.rnn_num_hidden
+            rnn_config = rnn.RNNConfig(cell_type=args.rnn_cell_type,
+                                     num_hidden=args.rnn_num_hidden,
+                                     num_layers=encoder_num_layers,
+                                     dropout_inputs=encoder_rnn_dropout_inputs,
+                                     dropout_states=encoder_rnn_dropout_states,
+                                     dropout_recurrent=encoder_rnn_dropout_recurrent,
+                                     residual=args.rnn_residual_connections,
+                                     first_residual_layer=args.rnn_first_residual_layer,
+                                     forget_bias=args.rnn_forget_bias)
+        else:
+            rnn_config = None
+            grn_input_dim = num_embed_source
+            
         config_encoder = encoder.ResGraphRecEncoderConfig(
             vocab_size=vocab_source_size,
             num_embed=num_embed_source,
             embed_dropout=encoder_embed_dropout,
 #            num_layers=args.grn_num_layers,
-            resgrn_config=grn.ResGRNConfig(input_dim=num_embed_source,
+            resgrn_config=grn.ResGRNConfig(input_dim=grn_input_dim,
                                            output_dim=args.grn_num_hidden,
                                            tensor_dim=vocab_edge_size,
                                            num_layers=args.grn_num_layers,
                                            activation=args.grn_activation,
-                                           add_gate=args.grn_edge_gating),
+                                           add_gate=args.grn_edge_gating,),
+            skip_rnn=args.skip_rnn,
+            rnn_config=rnn_config,
+            reverse_input=args.rnn_encoder_reverse_input
             )
         encoder_num_hidden=args.grn_num_hidden
     else:
