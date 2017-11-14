@@ -115,11 +115,15 @@ class ResGRNCell(object):
 
         self._first_W = mx.symbol.Variable(self._prefix + '_first_weight',
                                            shape=(input_dim, output_dim))
-        self._W = mx.symbol.Variable(self._prefix + '_weight',
-                                     shape=(output_dim, rank))
+        #self._W = mx.symbol.Variable(self._prefix + '_weight',
+        #                             shape=(output_dim, rank))
+        #self._Wl = [mx.symbol.Variable(self._prefix + str(i) + '_edge_weight',
+        #                               shape=(rank, output_dim))
+        #            for i in range(tensor_dim)]
         self._Wl = [mx.symbol.Variable(self._prefix + str(i) + '_edge_weight',
-                                       shape=(rank, output_dim))
+                                       shape=(output_dim, output_dim))
                     for i in range(tensor_dim)]
+
         self._bl = [mx.symbol.Variable(self._prefix + str(i) + '_edge_bias',
                                        shape=(output_dim,))
                     for i in range(tensor_dim)]
@@ -157,7 +161,7 @@ class ResGRNCell(object):
         for i in range(self._tensor_dim):
             # linear transformation
             Wi = self._Wl[i]
-            Wi = mx.symbol.dot(self._W, Wi)
+            #Wi = mx.symbol.dot(self._W, Wi)
             bi = self._bl[i]            
             output = mx.symbol.dot(inputs, Wi)
             output = mx.symbol.broadcast_add(output, bi)
