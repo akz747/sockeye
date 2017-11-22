@@ -341,8 +341,11 @@ def get_resgrn_encoder(config: ResGraphRecEncoderConfig,
 
         #encoder_class = FusedRecurrentEncoder if fused else RecurrentEncoder
         encoder_class = RecurrentEncoder
-        # One layer bi-directional RNN:
-        encoders.append(BiDirectionalRNNEncoder(rnn_config=config.rnn_config.copy(num_layers=1),
+        # Bi-directional RNN:
+        #encoders.append(BiDirectionalRNNEncoder(rnn_config=config.rnn_config.copy(num_layers=1),
+        #                                        prefix=C.BIDIRECTIONALRNN_PREFIX,
+        #                                        layout=C.TIME_MAJOR))
+        encoders.append(BiDirectionalRNNEncoder(rnn_config=config.rnn_config,
                                                 prefix=C.BIDIRECTIONALRNN_PREFIX,
                                                 layout=C.TIME_MAJOR))
         encoders.append(TimeMajor2BatchMajor())
