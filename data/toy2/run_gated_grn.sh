@@ -6,6 +6,8 @@ python -m sockeye.train --source data/toy2/train.en.tok \
     --val-source-graphs data/toy2/val.en.deps \
     --use-cpu \
     --use-grn \
+    --grn-type gated \
+    --grn-activation tanh \
     --grn-edge-gating \
     --grn-num-layers 2 \
     --output toy_model \

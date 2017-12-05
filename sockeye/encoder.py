@@ -46,6 +46,8 @@ def get_encoder(config: Config, fused: bool, embed_weight: Optional[mx.sym.Symbo
         return get_gcn_encoder(config, embed_weight)
     elif isinstance(config, ResGraphRecEncoderConfig):
         return get_resgrn_encoder(config, embed_weight)
+    elif isinstance(config, GatedGraphRecEncoderConfig):
+        return get_gatedgrn_encoder(config, embed_weight)
     else:
         raise ValueError("Unsupported encoder configuration")
 
@@ -160,6 +162,34 @@ class ResGraphRecEncoderConfig(Config):
         self.rnn_config = rnn_config
         self.reverse_input = reverse_input
 
+        
+class GatedGraphRecEncoderConfig(Config):
+    """
+    Gated Graph Recurrent encoder configuration.
+
+    :param vocab_size: Source vocabulary size.
+    :param num_embed: Size of embedding layer.
+    :param embed_dropout: Dropout probability on embedding layer.
+    :param gatedgrn_config: ResGRN configuration.
+    :param num_layers: The number of layers on top of the embeddings.
+    """
+    def __init__(self,
+                 vocab_size: int,
+                 num_embed: int,
+                 embed_dropout: float,
+                 gatedgrn_config: grn.GatedGRNConfig,
+                 skip_rnn: bool,
+                 rnn_config: rnn.RNNConfig,
+                 reverse_input: bool) -> None:
+        super().__init__()
+        self.vocab_size = vocab_size
+        self.num_embed = num_embed
+        self.embed_dropout = embed_dropout
+        self.gatedgrn_config = gatedgrn_config
+        self.skip_rnn = skip_rnn
+        self.rnn_config = rnn_config
+        self.reverse_input = reverse_input
+        
     
 def get_recurrent_encoder(config: RecurrentEncoderConfig, fused: bool,
                           embed_weight: Optional[mx.sym.Symbol] = None) -> 'Encoder':
@@ -356,6 +386,44 @@ def get_resgrn_encoder(config: ResGraphRecEncoderConfig,
     encoders.append(BatchMajor2TimeMajor())        
     return EncoderSequence(encoders)
 
+
+def get_gatedgrn_encoder(config: GatedGraphRecEncoderConfig,
+                         embed_weight: Optional[mx.sym.Symbol] = None) -> 'Encoder':
+    """
+    Creates a gated graph recurrent encoder.
+
+    :param config: Configuration for gated graph recurrent encoder.
+    :param embed_weight: Optionally use an existing embedding matrix instead of creating a new one.
+    :return: Encoder instance.
+    """
+    encoders = list()  # type: List[Encoder]
+    encoders.append(Embedding(num_embed=config.num_embed,
+                              vocab_size=config.vocab_size,
+                              prefix=C.SOURCE_EMBEDDING_PREFIX,
+                              dropout=config.embed_dropout,
+                              embed_weight=embed_weight))
+    if not config.skip_rnn:
+        encoders.append(BatchMajor2TimeMajor())
+        if config.reverse_input:
+            encoders.append(ReverseSequence())
+
+        if config.rnn_config.residual:
+            utils.check_condition(config.rnn_config.first_residual_layer >= 2,
+                              "Residual connections on the first encoder layer are not supported")
+
+        #encoder_class = FusedRecurrentEncoder if fused else RecurrentEncoder
+        encoder_class = RecurrentEncoder
+        # Bi-directional RNN:
+        encoders.append(BiDirectionalRNNEncoder(rnn_config=config.rnn_config,
+                                                prefix=C.BIDIRECTIONALRNN_PREFIX,
+                                                layout=C.TIME_MAJOR))
+        encoders.append(TimeMajor2BatchMajor())
+    
+    encoders.append(GatedGraphRecEncoder(config=config.gatedgrn_config,
+                                         prefix=C.GATEDGRN_PREFIX))
+
+    encoders.append(BatchMajor2TimeMajor())        
+    return EncoderSequence(encoders)
 
 
 class Encoder(ABC):
@@ -1305,6 +1373,42 @@ class ResGraphRecEncoder(Encoder):
         """
         adj = metadata
         outputs = self._resgrn.convolve(adj, data, seq_len)
+        return outputs, data_length, seq_len
+
+    def get_num_hidden(self) -> int:
+        """
+        Return the representation size of this encoder.
+        """
+        return self._num_hidden
+
+    def get_rnn_cells(self) -> List[mx.rnn.BaseRNNCell]:
+        """
+        Returns a list of RNNCells used by this encoder.
+        """
+        return []
+
+
+class GatedGraphRecEncoder(Encoder):
+    """
+    A Gated Graph Recurrent Encoder.
+    """
+
+    def __init__(self,
+                 config: grn.GatedGRNConfig,
+                 prefix: str):
+        self._gatedgrn = grn.get_gatedgrn(config, prefix)
+        self._num_hidden = config.output_dim
+
+    def encode(self,
+               data: mx.sym.Symbol, 
+               data_length: mx.sym.Symbol,
+               seq_len: int,
+               metadata=None):
+        """
+        Convolve data using adj.
+        """
+        adj = metadata
+        outputs = self._gatedgrn.convolve(adj, data, seq_len)
         return outputs, data_length, seq_len
 
     def get_num_hidden(self) -> int:

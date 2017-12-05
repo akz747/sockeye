@@ -377,21 +377,37 @@ def create_encoder_config(args: argparse.Namespace, vocab_source_size: int,
         else:
             rnn_config = None
             grn_input_dim = num_embed_source
-            
-        config_encoder = encoder.ResGraphRecEncoderConfig(
-            vocab_size=vocab_source_size,
-            num_embed=num_embed_source,
-            embed_dropout=encoder_embed_dropout,
-#            num_layers=args.grn_num_layers,
-            resgrn_config=grn.ResGRNConfig(input_dim=grn_input_dim,
-                                           output_dim=args.grn_num_hidden,
-                                           tensor_dim=vocab_edge_size,
-                                           num_layers=args.grn_num_layers,
-                                           activation=args.grn_activation,
-                                           add_gate=args.grn_edge_gating,),
-            skip_rnn=args.skip_rnn,
-            rnn_config=rnn_config,
-            reverse_input=args.rnn_encoder_reverse_input
+
+        if args.grn_type == 'residual':
+            config_encoder = encoder.ResGraphRecEncoderConfig(
+                vocab_size=vocab_source_size,
+                num_embed=num_embed_source,
+                embed_dropout=encoder_embed_dropout,
+                resgrn_config=grn.ResGRNConfig(input_dim=grn_input_dim,
+                                               output_dim=args.grn_num_hidden,
+                                               tensor_dim=vocab_edge_size,
+                                               num_layers=args.grn_num_layers,
+                                               no_residual=args.grn_no_residual,
+                                               activation=args.grn_activation,
+                                               add_gate=args.grn_edge_gating,),
+                skip_rnn=args.skip_rnn,
+                rnn_config=rnn_config,
+                reverse_input=args.rnn_encoder_reverse_input
+            )
+        elif args.grn_type == 'gated':
+            config_encoder = encoder.GatedGraphRecEncoderConfig(
+                vocab_size=vocab_source_size,
+                num_embed=num_embed_source,
+                embed_dropout=encoder_embed_dropout,
+                gatedgrn_config=grn.GatedGRNConfig(input_dim=grn_input_dim,
+                                                   output_dim=args.grn_num_hidden,
+                                                   tensor_dim=vocab_edge_size,
+                                                   num_layers=args.grn_num_layers,
+                                                   activation=args.grn_activation,
+                                                   add_gate=args.grn_edge_gating,),
+                skip_rnn=args.skip_rnn,
+                rnn_config=rnn_config,
+                reverse_input=args.rnn_encoder_reverse_input
             )
         encoder_num_hidden=args.grn_num_hidden
     else:

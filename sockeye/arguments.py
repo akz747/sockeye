@@ -537,9 +537,14 @@ def add_model_parameters(params):
     model_params.add_argument('--grn-num-layers', type=int_greater_or_equal(1),
                               default=1,
                               help="Number of layers for GRN encoder (use only with --use-grn). Default: %(default)s.")
+    model_params.add_argument('--grn-no-residual', action="store_true",
+                              help="Do not use residual connections in GRNs. Default: %(default)s")
     model_params.add_argument('--grn-activation', type=str,
                               default='relu',
                               help="Activation function to be used inside the GRN convolutions")
+    model_params.add_argument('--grn-type', type=str,
+                              default='residual', choices=['residual', 'gated'],
+                              help="Type of GRN encoder")
 
     #TODO: add fine grained control of hidden layer sizes when we have multiple GCN layers.
     model_params.add_argument('--grn-num-hidden',

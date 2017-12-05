@@ -42,6 +42,7 @@ CNN_ENCODER_PREFIX = ENCODER_PREFIX + "cnn_"
 CHAR_SEQ_ENCODER_PREFIX = ENCODER_PREFIX + "char_"
 GCN_PREFIX = "gcn_"
 RESGRN_PREFIX = "resgrn_"
+GATEDGRN_PREFIX = "gatedgrn_"
 
 # embedding prefixes
 SOURCE_EMBEDDING_PREFIX = "source_embed_"
