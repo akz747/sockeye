@@ -278,6 +278,7 @@ class GatedGRNCell(object):
         self._num_layers = num_layers
         self._activation = activation        
         self._add_edge_gate = add_gate
+        self._dropout = dropout
 
         # Linear transformation for the first layer in case input vectors
         # are of a different dimensionality from the output vectors
@@ -338,6 +339,8 @@ class GatedGRNCell(object):
             reset_outputs = self._reset(adj, outputs, seq_len)
             convolved = self._single_convolve(adj, reset_outputs, seq_len)
             outputs = self._update(adj, outputs, convolved, seq_len)
+            if self._dropout != 0.0:
+                outputs = mx.symbol.Dropout(outputs, p=self._dropout)
         return outputs
 
     def _reset(self, adj, inputs, seq_len):

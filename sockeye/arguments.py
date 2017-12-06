@@ -551,6 +551,9 @@ def add_model_parameters(params):
                               type=int_greater_or_equal(1),
                               default=512,
                               help='Number of GRN hidden units for encoder (use only with --use-grn). Default: %(default)s.')
+    model_params.add_argument('--grn-dropout', type=float,
+                              default=0.0,
+                              help="Dropout rate on the GRN output vectors.")
     
     #####
 
