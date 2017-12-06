@@ -279,6 +279,7 @@ class GatedGRNCell(object):
         self._activation = activation        
         self._add_edge_gate = add_gate
         self._dropout = dropout
+        self._dropout_mask = None
 
         # Linear transformation for the first layer in case input vectors
         # are of a different dimensionality from the output vectors
@@ -324,23 +325,34 @@ class GatedGRNCell(object):
                                                     shape=(1, 1))
                                  for i in range(tensor_dim)]
 
+
     def convolve(self, adj, inputs, seq_len):
         """
         Apply one convolution per layer. This is where we apply the gates
         A linear transformation is required in case the input dimensionality is
         different from GRN output dimensionality.
         """
+        # Transformation to match dims
         if self._input_dim != self._output_dim:
             outputs = mx.symbol.dot(inputs, self._first_W)
             outputs = mx.symbol.broadcast_add(outputs, self._first_b)
         else:
             outputs = inputs
+
+        # Variational/Bayesian Dropout mask. Mask does not change between layers.
+        #if self._dropout_mask is None:
+        self._dropout_mask = mx.sym.Dropout(data=mx.sym.ones_like(outputs), p=self._dropout)
+
+        # Convolutions
         for i in range(self._num_layers):
             reset_outputs = self._reset(adj, outputs, seq_len)
             convolved = self._single_convolve(adj, reset_outputs, seq_len)
             outputs = self._update(adj, outputs, convolved, seq_len)
-            if self._dropout != 0.0:
-                outputs = mx.symbol.Dropout(outputs, p=self._dropout)
+            #if self._dropout != 0.0:
+            #    outputs = mx.symbol.Dropout(outputs, p=self._dropout)
+            outputs = outputs * self._dropout_mask
+            #outputs = outputs * mx.sym.Dropout(data=mx.sym.ones_like(outputs), p=self._dropout)
+            #outputs = outputs * mx.sym.ones_like(outputs)
         return outputs
 
     def _reset(self, adj, inputs, seq_len):
@@ -436,4 +448,5 @@ class GatedGRNCell(object):
         return final_output
 
     def reset(self):
-        pass
+        logger.info("GRN DROPOUT MASK RESET")
+        self._dropout_mask = None
