@@ -244,7 +244,8 @@ class GatedGRNConfig(Config):
                  num_layers: int,
                  activation: str = 'relu',
                  add_gate: bool = False,
-                 dropout: float = 0.0) -> None:
+                 dropout: float = 0.0,
+                 norm: bool = False,) -> None:
         super().__init__()
         self.input_dim = input_dim
         self.output_dim = output_dim
@@ -253,10 +254,11 @@ class GatedGRNConfig(Config):
         self.activation = activation
         self.add_gate = add_gate
         self.dropout = dropout
+        self.norm = norm
         
                  
 class GatedGRNCell(object):
-    """Residual GRN cell
+    """Gated GRN cell
     """
     def __init__(self,
                  input_dim,
@@ -267,7 +269,8 @@ class GatedGRNCell(object):
                  add_gate=False,
                  prefix='gatedgrn_',
                  params=None, 
-                 dropout=0.0):
+                 dropout=0.0,
+                 norm=False):
         self._prefix = prefix
         self._params = params
         self._modified = False
@@ -280,6 +283,7 @@ class GatedGRNCell(object):
         self._add_edge_gate = add_gate
         self._dropout = dropout
         self._dropout_mask = None
+        self._norm = norm
 
         # Linear transformation for the first layer in case input vectors
         # are of a different dimensionality from the output vectors
@@ -443,6 +447,10 @@ class GatedGRNCell(object):
             output_list.append(output)
         outputs = mx.symbol.concat(*output_list, dim=1)
         outputs = mx.symbol.sum(outputs, axis=1)
+        if self._norm:
+            norm_adj = (adj != 0)
+            norm_factor = mx.symbol.sum(norm_adj, axis=2)
+            outputs = mx.symbol.broadcast_div(outputs, norm_factor)
         final_output = mx.symbol.Activation(outputs, act_type=self._activation)
         #final_output = mx.symbol.Dropout(final_output, p=self._dropout)
         return final_output

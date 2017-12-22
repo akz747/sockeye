@@ -20,6 +20,7 @@ python -m sockeye.train --source data/toy2/train.en.tok \
     --overwrite-output \
     --rnn-attention-num-hidden 18 \
     --grn-dropout 0.5 \
+    --grn-norm
 #    --skip-rnn
 #    --weight-tying \
 #    --weight-tying-type src_trg_softmax

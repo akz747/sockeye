@@ -554,7 +554,9 @@ def add_model_parameters(params):
     model_params.add_argument('--grn-dropout', type=float,
                               default=0.0,
                               help="Dropout rate on the GRN output vectors.")
-    
+
+    model_params.add_argument('--grn-norm', action="store_true",
+                              help="Normalize hidden vector calculations in GRN. Default: %(default)s")
     #####
 
     
