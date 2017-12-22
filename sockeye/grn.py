@@ -37,6 +37,7 @@ def get_gatedgrn(config, prefix):
                             activation=config.activation,
                             add_gate=config.add_gate,
                             dropout=config.dropout,
+                            norm=config.norm,
                             prefix=prefix)
     return gatedgrn
 
@@ -439,7 +440,8 @@ class GatedGRNCell(object):
             # convolution
             label_id = i + 1
             mask = mx.symbol.ones_like(adj) * label_id
-            adji = (mask == adj)
+            #adji = (mask == adj)
+            adji = mx.symbol.broadcast_equal(mask, adj)
             #adji = mx.symbol.slice_axis(adj, axis=1, begin=i, end=i+1)
             #adji = mx.symbol.reshape(adji, shape=(-1, seq_len, seq_len))
             output = mx.symbol.batch_dot(adji, output)
@@ -448,8 +450,8 @@ class GatedGRNCell(object):
         outputs = mx.symbol.concat(*output_list, dim=1)
         outputs = mx.symbol.sum(outputs, axis=1)
         if self._norm:
-            norm_adj = (adj != 0)
-            norm_factor = mx.symbol.sum(norm_adj, axis=2)
+            norm_adj = mx.symbol.broadcast_not_equal(adj, mx.symbol.zeros_like(adj))
+            norm_factor = mx.symbol.sum(norm_adj, axis=2, keepdims=True)
             outputs = mx.symbol.broadcast_div(outputs, norm_factor)
         final_output = mx.symbol.Activation(outputs, act_type=self._activation)
         #final_output = mx.symbol.Dropout(final_output, p=self._dropout)

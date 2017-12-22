@@ -774,6 +774,12 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
         for i, graph in enumerate(data_src_graphs):
             for tup in graph:
                 new_src_graphs[i][tup[0]][tup[1]] = tup[2] + 1
+                # Get the id for self label
+                if tup[0] == tup[1]:
+                    self_id = tup[2] + 1
+            # Populate diagonal, need this because pad symbols need to have a self loop
+            for j in range(bucket_size):
+                new_src_graphs[i][j][j] = self_id
         return new_src_graphs
         
     def reset(self):
