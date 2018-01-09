@@ -408,6 +408,7 @@ def create_encoder_config(args: argparse.Namespace, vocab_source_size: int,
                                                    dropout=args.grn_dropout,
                                                    norm=args.grn_norm),
                 pos_embeddings=args.grn_positional,
+                max_seq_len=max_seq_len_source,
                 skip_rnn=args.skip_rnn,
                 rnn_config=rnn_config,
                 reverse_input=args.rnn_encoder_reverse_input
