@@ -178,6 +178,7 @@ class GatedGraphRecEncoderConfig(Config):
                  num_embed: int,
                  embed_dropout: float,
                  gatedgrn_config: grn.GatedGRNConfig,
+                 pos_embeddings: bool,
                  skip_rnn: bool,
                  rnn_config: rnn.RNNConfig,
                  reverse_input: bool) -> None:
@@ -186,6 +187,7 @@ class GatedGraphRecEncoderConfig(Config):
         self.num_embed = num_embed
         self.embed_dropout = embed_dropout
         self.gatedgrn_config = gatedgrn_config
+        self.pos_embeddings = pos_embeddings
         self.skip_rnn = skip_rnn
         self.rnn_config = rnn_config
         self.reverse_input = reverse_input
@@ -418,6 +420,10 @@ def get_gatedgrn_encoder(config: GatedGraphRecEncoderConfig,
                                                 prefix=C.BIDIRECTIONALRNN_PREFIX,
                                                 layout=C.TIME_MAJOR))
         encoders.append(TimeMajor2BatchMajor())
+
+    if config.pos_embeddings:
+        encoders.append(AddGraphSinCosPositionalEmbeddings(num_embed=config.num_embed,
+                                                           prefix=C.SOURCE_GRAPH_POSITIONAL_EMBEDDING_PREFIX))
     
     encoders.append(GatedGraphRecEncoder(config=config.gatedgrn_config,
                                          prefix=C.GATEDGRN_PREFIX))
@@ -757,6 +763,61 @@ class NoOpPositionalEmbeddings(PositionalEncoder):
     def get_num_hidden(self) -> int:
         return self.num_embed
 
+
+class AddGraphSinCosPositionalEmbeddings(PositionalEncoder):
+    """
+    Takes an encoded sequence and adds fixed positional embeddings as in Vaswani et al, 2017 to it.
+    This uses distance from the root as positions, which are precalculated and given
+    as parameters for the encode method.
+
+    :param num_embed: Embedding size.
+    :param max_seq_len: Maximum sequence length.
+    :param prefix: Name prefix for symbols of this encoder.
+    """
+
+    def __init__(self,
+                 num_embed: int,
+                 prefix: str) -> None:
+        utils.check_condition(num_embed % 2 == 0, "Positional embeddings require an even embedding size it "
+                                                  "is however %d." % num_embed)
+        self.num_embed = num_embed
+        self.prefix = prefix
+
+    def encode(self,
+               data: mx.sym.Symbol,
+               data_length: Optional[mx.sym.Symbol],
+               seq_len: int,
+               metadata=None) -> Tuple[mx.sym.Symbol, mx.sym.Symbol, int]:
+        """
+        :param data: (batch_size, source_seq_len, num_embed)
+        :param data_length: (batch_size,)
+        :param seq_len: sequence length.
+        :param positions: (batch_size, source_seq_len)
+        :return: (batch_size, source_seq_len, num_embed)
+        """
+        # Assume metadata is (adj, positions)
+        positions = metadata[1]
+        embedding = mx.sym.broadcast_add(data,
+                                         mx.sym.BlockGrad(mx.symbol.Custom(length=seq_len,
+                                                                           depth=self.num_embed,
+                                                                           positions=positions,
+                                                                           name="%sgraph_positional_encodings" % self.prefix,
+                                                                           op_type='graph_positional_encodings')))
+        return embedding, data_length, seq_len
+
+    def encode_positions(self,
+                         positions: mx.sym.Symbol,
+                         data: mx.sym.Symbol) -> mx.sym.Symbol:
+        """
+        :param positions: (batch_size,)
+        :param data: (batch_size, num_embed)
+        :return: (batch_size, num_embed)
+        """
+        return data
+
+    def get_num_hidden(self) -> int:
+        return self.num_embed
+    
 
 def get_positional_embedding(positional_embedding_type, num_embed, max_seq_len, prefix) -> PositionalEncoder:
     if positional_embedding_type == C.FIXED_POSITIONAL_EMBEDDING:
@@ -1407,7 +1468,8 @@ class GatedGraphRecEncoder(Encoder):
         """
         Convolve data using adj.
         """
-        adj = metadata
+        # Assumes metadata is (adj, positions)
+        adj = metadata[0]
         outputs = self._gatedgrn.convolve(adj, data, seq_len)
         return outputs, data_length, seq_len
 
