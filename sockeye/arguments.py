@@ -557,6 +557,8 @@ def add_model_parameters(params):
 
     model_params.add_argument('--grn-norm', action="store_true",
                               help="Normalize hidden vector calculations in GRN. Default: %(default)s")
+    model_params.add_argument('--grn-positional', action="store_true",
+                              help="Add graph positional embeddings before GRN")
     #####
 
     

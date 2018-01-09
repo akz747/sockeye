@@ -482,10 +482,10 @@ class GraphPositionalEncodings(mx.operator.CustomOp):
 
     def __init__(self, length: int, depth: int, positions) -> None:
         super().__init__()
-        self.encodings = self.get_encodings(length, depth, positions)
+        self.encodings = self.get_encodings(length, depth)#, positions)
 
     @staticmethod
-    def get_encodings(length, depth, positions) -> np.ndarray:
+    def get_encodings(length, depth):#, positions) -> np.ndarray:
         utils.check_condition(depth % 2 == 0, "Positional embeddings require an even embedding size it "
                                               "is however %d." % depth)
         # (1, depth)
@@ -494,7 +494,7 @@ class GraphPositionalEncodings(mx.operator.CustomOp):
         # (length, 1)
         # This is the main difference compared to standard positional embeddings.
         # We use precalculated positions instead.
-        #positions = np.arange(0, length).reshape((-1, 1))
+        positions = np.arange(0, length).reshape((-1, 1))
         scaled_positions = positions / np.power(10000, (2 * channels) / depth)
         # sinusoids:
         sin = np.sin(scaled_positions)
@@ -503,32 +503,6 @@ class GraphPositionalEncodings(mx.operator.CustomOp):
         # interleave: (1, length, num_embed)
         encodings = np.hstack([sin, cos]).reshape(1, length, depth)
         return encodings
-
-    @staticmethod
-    def _get_positions(self, length, adj):
-        # Start with a high value for padding symbols
-        positions = np.ones(length) * 1000
-        dist = 0
-        curr_node = 0
-        positions[curr_node] = dist # fill root node pos
-        finished = False
-        # Start recursion over the adj matrix
-        self._fill_pos(dist+1, curr_node, positions, adj)
-        return positions
-    
-    @staticmethod
-    def _fill_pos(self, dist, curr_node, positions, adj):
-        tups = enumerate(adj[curr_node])
-        # fill positions first (BFS)
-        for i, edge in tups:
-            if edge == 1:
-                if positions[i] == 1000:
-                    # not updated yet
-                    positions[i] = dist
-        # iterate again for recursion
-        for i, edge in tups:
-            if edge == 1:
-                self._fill_pos(dist+1, i, positions, adj)                    
 
     def forward(self, is_train, req, in_data, out_data, aux):
         self.assign(out_data[0], req[0], self.encodings)
@@ -540,11 +514,13 @@ class GraphPositionalEncodings(mx.operator.CustomOp):
 @mx.operator.register("graph_positional_encodings")
 class GraphPositionalEncodingsProp(mx.operator.CustomOpProp):
 
-    def __init__(self, length: str, depth: str, adj) -> None:
+    def __init__(self, length, depth, positions=None) -> None:
+        print(positions)
         super().__init__()
         self.length = int(length)
         self.depth = int(depth)
         self.positions = positions
+        #self.positions = int(depth)
 
     def list_arguments(self):
         return []
@@ -559,4 +535,4 @@ class GraphPositionalEncodingsProp(mx.operator.CustomOpProp):
         return [], [np.float32], []
 
     def create_operator(self, ctx, shapes, dtypes):
-        return GraphPositionalEncodings(length=self.length, depth=self.depth, adj=self.adj)
+        return GraphPositionalEncodings(length=self.length, depth=self.depth, positions=self.positions)

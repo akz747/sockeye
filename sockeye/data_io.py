@@ -220,6 +220,7 @@ def get_training_data_iters(source: str, target: str, source_graphs:str,
                                             vocab_target[C.EOS_SYMBOL],
                                             C.PAD_ID,
                                             vocab_target[C.UNK_SYMBOL],
+                                            vocab_edge['default'],
                                             bucket_batch_sizes=None,
                                             fill_up=fill_up)
 
@@ -243,6 +244,7 @@ def get_training_data_iters(source: str, target: str, source_graphs:str,
                                           vocab_target[C.EOS_SYMBOL],
                                           C.PAD_ID,
                                           vocab_target[C.UNK_SYMBOL],
+                                          vocab_edge['default'],
                                           bucket_batch_sizes=train_iter.bucket_batch_sizes,
                                           fill_up=fill_up)
 
@@ -476,6 +478,7 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
     :param eos_id: Word id for end-of-sentence.
     :param pad_id: Word id for padding symbols.
     :param unk_id: Word id for unknown symbols.
+    :param forward_id: Word id for forward edge symbol (used to get graph positions).
     :param bucket_batch_sizes: Pre-computed bucket batch sizes (used to keep iterators consistent for train/validation).
     :param dtype: Data type of generated NDArrays.
     """
@@ -492,11 +495,13 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
                  eos_id: int,
                  pad_id: int,
                  unk_id: int,
+                 forward_id: int,
                  bucket_batch_sizes: Optional[List[BucketBatchSize]] = None,
                  fill_up: Optional[str] = None,
                  source_data_name=C.SOURCE_NAME,
                  target_data_name=C.TARGET_NAME,
                  src_graphs_name=C.SOURCE_GRAPHS_NAME,
+                 src_positions_name=C.SOURCE_POSITIONS_NAME,
                  label_name=C.TARGET_LABEL_NAME,
                  dtype='float32') -> None:
         super(ParallelBucketSentenceIter, self).__init__()
@@ -511,10 +516,12 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
         self.eos_id = eos_id
         self.pad_id = pad_id
         self.unk_id = unk_id
+        self.forward_id = forward_id
         self.dtype = dtype
         self.source_data_name = source_data_name
         self.target_data_name = target_data_name
         self.src_graphs_name = src_graphs_name
+        self.src_positions_name = src_positions_name
         self.label_name = label_name
         self.fill_up = fill_up
 
@@ -524,6 +531,7 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
         self.data_label = [[] for _ in self.buckets]  # type: ignore
         self.data_label_average_len = [0 for _ in self.buckets]
         self.data_src_graphs = [[] for _ in self.buckets]
+        self.data_src_positions = [[] for _ in self.buckets]
         
         # Per-bucket batch sizes (num seq, num word)
         # If not None, populated as part of assigning to buckets
@@ -553,6 +561,10 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
                            shape=(self.bucket_batch_sizes[-1].batch_size,
                                   self.default_bucket_key[0],
                                   self.default_bucket_key[0]),
+                           layout=C.BATCH_MAJOR),
+            mx.io.DataDesc(name=src_positions_name,
+                           shape=(self.bucket_batch_sizes[-1].batch_size,
+                                  self.default_bucket_key[0]),
                            layout=C.BATCH_MAJOR)]
 
         self.provide_label = [
@@ -560,7 +572,7 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
                            shape=(self.bucket_batch_sizes[-1].batch_size, self.default_bucket_key[1]),
                            layout=C.BATCH_MAJOR)]
 
-        self.data_names = [self.source_data_name, self.target_data_name, self.src_graphs_name]
+        self.data_names = [self.source_data_name, self.target_data_name, self.src_graphs_name, self.src_positions_name]
         self.label_names = [self.label_name]
         logger.info(self.data_names)
         logger.info(self.label_names)
@@ -585,6 +597,7 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
         #####
         # GCN
         self.nd_src_graphs = []
+        self.nd_src_positions = []
 
         self.reset()
 
@@ -632,6 +645,9 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
             #####
             # GCN
             self.data_src_graphs[buck_idx].append(src_graph)
+            # just fill empty lists here, these will be updated when
+            # converting the data.
+            self.data_src_positions[buck_idx].append([])
             #####
 
         # Average number of non-padding elements in target sequence per bucket
@@ -729,6 +745,7 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
             #####
             # GCN
             self.data_src_graphs[i] = self._convert_to_adj_matrix(self.buckets[i][0], self.data_src_graphs[i])
+            self.data_src_positions[i] = self._get_graph_positions(self.buckets[i][0], self.data_src_graphs[i])
             #logger.info("SRC_METADATA SHAPE: " + str(self.data_src_metadata[i].shape))
             #####
             
@@ -752,7 +769,9 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
                     ####
                     # GCN: we add an empty list as padding
                     self.data_src_graphs[i] = np.concatenate((self.data_src_graphs[i], self.data_src_graphs[i][random_indices, :, :]),
-                                                         axis=0)
+                                                             axis=0)
+                    self.data_src_positions[i] = np.concatenate((self.data_src_positions[i], self.data_src_positions[i][random_indices]),
+                                                                axis=0)
                     ####
                     #logger.info('Shapes after replication')
                     #logger.info(self.data_source[i].shape)
@@ -781,6 +800,51 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
             for j in range(bucket_size):
                 new_src_graphs[i][j][j] = self_id
         return new_src_graphs
+
+    def _get_graph_positions(self, bucket_size, data_src_graphs):
+        """
+        Precalculate graph positions according to the distance from the root.
+        """
+        batch_size = data_src_graphs.shape[0]
+        positions = np.array([np.ones(bucket_size) * 1000 for sent in range(batch_size)])
+        for i, adj in enumerate(data_src_graphs):
+            dist = 0
+            curr_node = self._find_root(adj)
+            positions[i][curr_node] = dist # fill root node pos
+            #print(adj)
+            #print(self.forward_id + 1)
+            forward_mask = np.ones_like(adj) * (self.forward_id + 1)
+            forward_adj = (forward_mask == adj)
+            # Start recursion over the adj matrix
+            
+            self._fill_pos(dist+1, curr_node, positions[i], forward_adj)
+        return positions
+
+    def _find_root(self, adj):
+        """
+        Find root node by inspecting the adj matrix.
+        """
+        adj_t = np.transpose(adj)
+        for i, row in enumerate(adj_t):
+            if self.forward_id + 1 not in row:
+                return i
+
+    def _fill_pos(self, dist, curr_node, positions, adj):
+        tups = enumerate(adj[curr_node])
+        # fill positions first (BFS)
+        #print(positions)
+        #print(list(tups))
+        for i, edge in tups:
+            if edge:
+                if positions[i] == 1000:
+                    #print('UPDATED')
+                    # not updated yet
+                    positions[i] = dist
+        # iterate again for recursion
+        tups = enumerate(adj[curr_node])
+        for i, edge in tups:
+            if edge:
+                self._fill_pos(dist+1, i, positions, adj)   
         
     def reset(self):
         """
@@ -796,6 +860,7 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
         #####
         # GCN
         self.nd_src_graphs = []
+        self.nd_src_positions = []
         #####
 
         self.indices = []
@@ -804,6 +869,12 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
             # shuffle indices within each bucket
             self.indices.append(np.random.permutation(len(self.data_source[i])))
             self._append_ndarrays(i, self.indices[-1])
+        #logger.info(self.nd_source)
+        #logger.info(self.nd_src_graphs)
+        #logger.info(self.nd_src_positions)
+        #logger.info(self.nd_src_positions[1].asnumpy())
+        #logger.info(self.data_src_graphs)
+        #logger.info(self.data_src_positions)
 
     def _append_ndarrays(self, bucket: int, shuffled_indices: np.array):
         """
@@ -816,7 +887,8 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
         self.nd_source.append(mx.nd.array(self.data_source[bucket].take(shuffled_indices, axis=0), dtype=self.dtype))
         self.nd_target.append(mx.nd.array(self.data_target[bucket].take(shuffled_indices, axis=0), dtype=self.dtype))
         self.nd_label.append(mx.nd.array(self.data_label[bucket].take(shuffled_indices, axis=0), dtype=self.dtype))
-        self.nd_src_graphs.append(mx.nd.array(self.data_src_graphs[bucket].take(shuffled_indices, axis=0), dtype=self.dtype))           
+        self.nd_src_graphs.append(mx.nd.array(self.data_src_graphs[bucket].take(shuffled_indices, axis=0), dtype=self.dtype))
+        self.nd_src_positions.append(mx.nd.array(self.data_src_positions[bucket].take(shuffled_indices, axis=0), dtype=self.dtype))           
 
     def iter_next(self) -> bool:
         """
@@ -838,7 +910,8 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
         source = self.nd_source[i][j:j + batch_size_seq]
         target = self.nd_target[i][j:j + batch_size_seq]
         src_graphs = self.nd_src_graphs[i][j:j + batch_size_seq]
-        data = [source, target, src_graphs]
+        src_positions = self.nd_src_positions[i][j:j + batch_size_seq]
+        data = [source, target, src_graphs, src_positions]
         label = [self.nd_label[i][j:j + batch_size_seq]]
 
         provide_data = [mx.io.DataDesc(name=n, shape=x.shape, layout=C.BATCH_MAJOR) for n, x in

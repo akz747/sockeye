@@ -428,7 +428,8 @@ def get_gatedgrn_encoder(config: GatedGraphRecEncoderConfig,
     encoders.append(GatedGraphRecEncoder(config=config.gatedgrn_config,
                                          prefix=C.GATEDGRN_PREFIX))
 
-    encoders.append(BatchMajor2TimeMajor())        
+    encoders.append(BatchMajor2TimeMajor())
+    logger.info(encoders)
     return EncoderSequence(encoders)
 
 
@@ -797,23 +798,50 @@ class AddGraphSinCosPositionalEmbeddings(PositionalEncoder):
         """
         # Assume metadata is (adj, positions)
         positions = metadata[1]
-        embedding = mx.sym.broadcast_add(data,
-                                         mx.sym.BlockGrad(mx.symbol.Custom(length=seq_len,
-                                                                           depth=self.num_embed,
-                                                                           positions=positions,
-                                                                           name="%sgraph_positional_encodings" % self.prefix,
-                                                                           op_type='graph_positional_encodings')))
+        #positions = mx.sym.concat(metadata[0], metadata[1])
+        #logger.info('METADATA ' + str(metadata))
+        #logger.info(positions.asnumpy())
+        #graph_pos_embs = mx.symbol.Custom(length=seq_len,
+        #                                  depth=self.num_embed,
+        #                                  positions=positions,
+        #                                  name="%sgraph_positional_encodings" % self.prefix,
+        #                                  op_type='graph_positional_encodings')
+        graph_pos_embs = self.encode_positions(positions, data, seq_len)
+        logger.info('METADATA ' + str(metadata))
+        embedding = mx.sym.broadcast_add(data, mx.sym.BlockGrad(graph_pos_embs))
+        #embedding = mx.sym.broadcast_add(data, graph_pos_embs)
+        #embedding = mx.sym.concat(data, positions)
         return embedding, data_length, seq_len
 
     def encode_positions(self,
                          positions: mx.sym.Symbol,
-                         data: mx.sym.Symbol) -> mx.sym.Symbol:
+                         data: mx.sym.Symbol,
+                         seq_len) -> mx.sym.Symbol:
         """
         :param positions: (batch_size,)
         :param data: (batch_size, num_embed)
         :return: (batch_size, num_embed)
         """
-        return data
+        # (batch_size, 1)
+        #positions = mx.sym.transpose(positions)
+        positions = mx.sym.expand_dims(positions, axis=2)
+        #positions = mx.sym.concat(data, positions)
+        #positions = mx.sym.expand_dims(data=mx.sym.arange(start=0, stop=seq_len, step=1), axis=0)
+        # (num_embed,)
+        channels = mx.sym.arange(0, self.num_embed // 2)
+        # (1, num_embed,)
+        scaling = mx.sym.expand_dims(1. / mx.sym.pow(10000, (2 * channels) / self.num_embed), axis=0)
+
+        # (batch_size, num_embed/2)
+        scaled_positions = mx.sym.dot(positions, scaling)
+
+        sin = mx.sym.sin(scaled_positions)
+        cos = mx.sym.cos(scaled_positions)
+
+        # (batch_size, num_embed/2)
+        pos_embedding = mx.sym.concat(sin, cos, dim=2)
+        return pos_embedding
+        #return mx.sym.broadcast_add(data, pos_embedding, name="%s_add" % self.prefix)
 
     def get_num_hidden(self) -> int:
         return self.num_embed
