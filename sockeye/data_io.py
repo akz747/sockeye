@@ -825,9 +825,11 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
         Find root node by inspecting the adj matrix.
         """
         adj_t = np.transpose(adj)
+        fallback = 0 # cycles...
         for i, row in enumerate(adj_t):
             if self.forward_id + 1 not in row:
                 return i
+        return fallback
 
     def _fill_pos(self, dist, curr_node, positions, adj):
         tups = enumerate(adj[curr_node])
@@ -844,7 +846,8 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
         tups = enumerate(adj[curr_node])
         for i, edge in tups:
             if edge:
-                self._fill_pos(dist+1, i, positions, adj)   
+                if positions[i] == dist:
+                    self._fill_pos(dist+1, i, positions, adj)   
         
     def reset(self):
         """
