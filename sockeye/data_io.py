@@ -752,7 +752,7 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
             self.data_src_graphs[i] = self._convert_to_adj_matrix(self.buckets[i][0], self.data_src_graphs[i])
             self.data_src_positions[i] = self._get_graph_positions(self.buckets[i][0], self.data_src_graphs[i])
             try:
-                max_depth = np.median(np.max(self.data_src_positions[i], axis=1))
+                max_depth = np.min(np.max(self.data_src_positions[i], axis=1))
                 self.data_src_depths[i] = int(round(max_depth))
             except ValueError:
                 # empty bucket
