@@ -117,7 +117,7 @@ class InferenceModel(model.SockeyeModel):
         logger.info("AFTER DECODER MODULE")
         
         self.decoder_data_shapes_cache = dict()  # bucket_key -> shape cache
-        max_encoder_data_shapes = self._get_encoder_data_shapes(self.encoder_default_bucket_key)
+        max_encoder_data_shapes = self._get_encoder_data_shapes(self.encoder_default_bucket_key[0])
         max_decoder_data_shapes = self._get_decoder_data_shapes(self.decoder_default_bucket_key)
         logger.info("BEFORE ENCODER BIND")
         logger.info(self.encoder_module)
@@ -140,16 +140,19 @@ class InferenceModel(model.SockeyeModel):
         :return: Tuple of encoder module and default bucket key.
         """
 
-        def sym_gen(source_seq_len: int):
+        def sym_gen(seq_lens):
             source = mx.sym.Variable(C.SOURCE_NAME)
             source_graphs = mx.sym.Variable(C.SOURCE_GRAPHS_NAME)
             source_positions = mx.sym.Variable(C.SOURCE_POSITIONS_NAME)
             source_length = utils.compute_lengths(source)
-
+            source_seq_len, source_depth = seq_lens
+            
             (source_encoded,
              source_encoded_length,
              source_encoded_seq_len) = self.encoder.encode(source, source_length, source_seq_len,
-                                                           metadata=(source_graphs, source_positions))
+                                                           metadata=(source_graphs,
+                                                                     source_positions,
+                                                                     source_depth))
             # TODO(fhieber): Consider standardizing encoders to return batch-major data to avoid this line.
             source_encoded = mx.sym.swapaxes(source_encoded, dim1=0, dim2=1)
 
@@ -162,7 +165,15 @@ class InferenceModel(model.SockeyeModel):
             label_names = []  # type: List[str]
             return mx.sym.Group(decoder_init_states), data_names, label_names
 
-        default_bucket_key = self.max_input_length
+        ############
+        # GCN/GRN
+        # Update default_bucket_key
+        default_bucket_key = (self.max_input_length,
+                              self.max_input_length)
+        #default_bucket_key = train_iter.default_bucket_key
+        #default_bucket_key = self.max_input_length
+        logger.info(default_bucket_key)
+        
         module = mx.mod.BucketingModule(sym_gen=sym_gen,
                                         default_bucket_key=default_bucket_key,
                                         context=self.context)
@@ -258,9 +269,10 @@ class InferenceModel(model.SockeyeModel):
         :param source_max_length: Bucket key.
         :return: Encoded source, source length, initial decoder hidden state, initial decoder hidden states.
         """
+        bucket_key=(source_max_length, source_max_length)
         batch = mx.io.DataBatch(data=[source, source_graph, source_positions],
                                 label=None,
-                                bucket_key=source_max_length,
+                                bucket_key=bucket_key,
                                 provide_data=self._get_encoder_data_shapes(source_max_length))
 
 #        batch = mx.io.DataBatch(data=[source, source_length, source_graph], label=None,
