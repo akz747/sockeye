@@ -101,7 +101,7 @@ class InferenceModel(model.SockeyeModel):
 
         # check the maximum supported length of the encoder & decoder:
         if self.max_supported_seq_len_source is not None:
-            utils.check_condition(self.max_input_length / 2 <= self.max_supported_seq_len_source,
+            utils.check_condition(self.max_input_length <= self.max_supported_seq_len_source,
                                   "Encoder only supports a maximum length of %d" % self.max_supported_seq_len_source)
         if self.max_supported_seq_len_target is not None:
             decoder_max_len = self.get_max_output_length(max_input_length)
@@ -721,7 +721,17 @@ class Translator:
                 # Stripping for graphs as well
                 #new_graph[0][tup[2]][tup[0]][tup[1]] = 1.0
                 new_graph[0][tup[0]][tup[1]] = tup[2] + 1
+                # Get the id for self label
+                if tup[0] == tup[1]:
+                    self_id = tup[2] + 1
+        # Populate diagonal, need this because pad symbols need to have a self loop
+        for j in range(bucket_key):
+            new_graph[0][j][j] = self_id
         ########
+        logger.info(source)
+        logger.info(bucket_key)
+        logger.info(new_graph)
+        logger.info(new_graph.asnumpy())
 
         return source, bucket_key, new_graph
 
