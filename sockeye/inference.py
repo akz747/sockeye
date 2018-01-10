@@ -110,18 +110,25 @@ class InferenceModel(model.SockeyeModel):
                                   "ratio observed during training." % (self.max_supported_seq_len_target,
                                                                        decoder_max_len))
 
+        logger.info("BEFORE ENCODER MODULE")
         self.encoder_module, self.encoder_default_bucket_key = self._get_encoder_module()
         self.decoder_module, self.decoder_default_bucket_key = self._get_decoder_module()
-
+        logger.info("AFTER DECODER MODULE")
+        
         self.decoder_data_shapes_cache = dict()  # bucket_key -> shape cache
         max_encoder_data_shapes = self._get_encoder_data_shapes(self.encoder_default_bucket_key)
         max_decoder_data_shapes = self._get_decoder_data_shapes(self.decoder_default_bucket_key)
+        logger.info("BEFORE ENCODER BIND")
+        logger.info(self.encoder_module)
+        logger.info(max_encoder_data_shapes)
         self.encoder_module.bind(data_shapes=max_encoder_data_shapes, for_training=False, grad_req="null")
+        logger.info("AFTER ENCODER BIND")
         self.decoder_module.bind(data_shapes=max_decoder_data_shapes, for_training=False, grad_req="null")
 
         self.load_params_from_file(self.fname_params)
         self.encoder_module.init_params(arg_params=self.params, allow_missing=False)
         self.decoder_module.init_params(arg_params=self.params, allow_missing=False)
+        logger.info("FINISHED INIT")
 
     def _get_encoder_module(self) -> Tuple[mx.mod.BucketingModule, int]:
         """
@@ -135,12 +142,13 @@ class InferenceModel(model.SockeyeModel):
         def sym_gen(source_seq_len: int):
             source = mx.sym.Variable(C.SOURCE_NAME)
             source_graphs = mx.sym.Variable(C.SOURCE_GRAPHS_NAME)
+            source_positions = mx.sym.Variable(C.SOURCE_POSITIONS_NAME)
             source_length = utils.compute_lengths(source)
 
             (source_encoded,
              source_encoded_length,
              source_encoded_seq_len) = self.encoder.encode(source, source_length, source_seq_len,
-                                                           metadata=source_graphs)
+                                                           metadata=(source_graphs, source_positions))
             # TODO(fhieber): Consider standardizing encoders to return batch-major data to avoid this line.
             source_encoded = mx.sym.swapaxes(source_encoded, dim1=0, dim2=1)
 
@@ -149,7 +157,7 @@ class InferenceModel(model.SockeyeModel):
                                                            source_encoded_length,
                                                            source_encoded_seq_len)
 
-            data_names = [C.SOURCE_NAME, C.SOURCE_GRAPHS_NAME]
+            data_names = [C.SOURCE_NAME, C.SOURCE_GRAPHS_NAME, C.SOURCE_POSITIONS_NAME]
             label_names = []  # type: List[str]
             return mx.sym.Group(decoder_init_states), data_names, label_names
 
@@ -211,6 +219,9 @@ class InferenceModel(model.SockeyeModel):
                                layout=C.BATCH_MAJOR),
                 mx.io.DataDesc(name=C.SOURCE_GRAPHS_NAME, 
                                shape=(self.encoder_batch_size, bucket_key, bucket_key),
+                               layout=C.BATCH_MAJOR),
+                mx.io.DataDesc(name=C.SOURCE_POSITIONS_NAME,
+                               shape=(self.encoder_batch_size, bucket_key),
                                layout=C.BATCH_MAJOR)]
 
 
