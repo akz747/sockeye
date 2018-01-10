@@ -709,6 +709,12 @@ class Translator:
                 # Stripping for graphs as well
                 #new_graph[0][tup[2]][tup[0]][tup[1]] = 1.0
                 new_graph[0][tup[0]][tup[1]] = tup[2] + 1
+                # Get the id for self label
+                if tup[0] == tup[1]:
+                    self_id = tup[2] + 1
+        # Populate diagonal, need this because pad symbols need to have a self loop
+        for j in range(bucket_key):
+            new_graph[0][j][j] = self_id
         ########
 
         return source, bucket_key, new_graph
