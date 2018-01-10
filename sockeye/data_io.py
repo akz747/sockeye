@@ -754,9 +754,11 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
             try:
                 max_depth = np.min(np.max(self.data_src_positions[i], axis=1))
                 self.data_src_depths[i] = int(round(max_depth))
+                if self.data_src_depths[i] == 0:
+                    self.data_src_depths[i] = 1
             except ValueError:
                 # empty bucket
-                self.data_src_depths[i] = 0
+                self.data_src_depths[i] = 1
 
             #logger.info(max_dist)
             #logger.info("SRC_METADATA SHAPE: " + str(self.data_src_metadata[i].shape))
