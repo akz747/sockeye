@@ -245,7 +245,8 @@ class InferenceModel(model.SockeyeModel):
     def run_encoder(self,
                     source: mx.nd.NDArray,
                     source_max_length: int,
-                    source_graph: mx.nd.NDArray) -> List[mx.nd.NDArray]:
+                    source_graph: mx.nd.NDArray,
+                    source_positions: mx.nd.NDArray) -> List[mx.nd.NDArray]:
         """
         Runs forward pass of the encoder.
         Encodes source given source length and bucket key.
@@ -257,7 +258,7 @@ class InferenceModel(model.SockeyeModel):
         :param source_max_length: Bucket key.
         :return: Encoded source, source length, initial decoder hidden state, initial decoder hidden states.
         """
-        batch = mx.io.DataBatch(data=[source, source_graph],
+        batch = mx.io.DataBatch(data=[source, source_graph, source_positions],
                                 label=None,
                                 bucket_key=source_max_length,
                                 provide_data=self._get_encoder_data_shapes(source_max_length))
@@ -727,13 +728,62 @@ class Translator:
         # Populate diagonal, need this because pad symbols need to have a self loop
         for j in range(bucket_key):
             new_graph[0][j][j] = self_id
-        ########
-        logger.info(source)
-        logger.info(bucket_key)
-        logger.info(new_graph)
-        logger.info(new_graph.asnumpy())
 
-        return source, bucket_key, new_graph
+        positions = self._get_graph_positions(bucket_key, new_graph.asnumpy())
+        positions = mx.nd.array(positions)
+        ########
+        #logger.info(source)
+        #logger.info(bucket_key)
+        #logger.info(new_graph)
+        #logger.info(new_graph.asnumpy())
+        #logger.info(positions.asnumpy())
+
+        return source, bucket_key, new_graph, positions
+
+
+    def _get_graph_positions(self, bucket_key, graph):
+        """
+        Precalculate graph positions according to the distance from the root.
+        """
+        ##############
+        # !!!!!!!!!!
+        self.forward_id = 1
+        ###############
+        positions = np.ones((1, bucket_key)) * 1000
+        adj = graph[0]
+        dist = 0
+        curr_node = self._find_root(adj)
+        positions[0][curr_node] = dist # fill root node pos
+        forward_mask = np.ones_like(adj) * (self.forward_id + 1)
+        forward_adj = (forward_mask == adj)
+        # Start recursion over the adj matrix
+        self._fill_pos(dist+1, curr_node, positions[0], forward_adj)
+        return positions
+
+    def _find_root(self, adj):
+        """
+        Find root node by inspecting the adj matrix.
+        """
+        adj_t = np.transpose(adj)
+        fallback = 0 # cycles...
+        for i, row in enumerate(adj_t):
+            if self.forward_id + 1 not in row:
+                return i
+        return fallback
+
+    def _fill_pos(self, dist, curr_node, positions, adj):
+        tups = enumerate(adj[curr_node])
+        for i, edge in tups:
+            if edge:
+                if positions[i] == 1000:
+                    # not updated yet
+                    positions[i] = dist
+        # iterate again for recursion
+        tups = enumerate(adj[curr_node])
+        for i, edge in tups:
+            if edge:
+                if positions[i] == dist:
+                    self._fill_pos(dist+1, i, positions, adj)  
 
     def _make_result(self,
                      trans_input: TranslatorInput,
@@ -774,7 +824,8 @@ class Translator:
     def translate_nd(self,
                      source: mx.nd.NDArray,
                      source_length: int,
-                     source_graph: mx.nd.NDArray) -> Translation:
+                     source_graph: mx.nd.NDArray,
+                     source_positions: mx.nd.NDArray) -> Translation:
         """
         Translates source of source_length, given a bucket_key.
 
@@ -783,20 +834,22 @@ class Translator:
 
         :return: Sequence of translated ids, attention matrix, length-normalized negative log probability.
         """
-        return self._get_best_from_beam(*self._beam_search(source, source_length, source_graph))
+        return self._get_best_from_beam(*self._beam_search(source, source_length, source_graph, source_positions))
 
     def _encode(self, source: mx.nd.NDArray,
                 source_length: int,
-                source_graph: mx.nd.NDArray) -> List[ModelState]:
+                source_graph: mx.nd.NDArray,
+                source_positions: mx.nd.NDArray) -> List[ModelState]:
         """
         Returns a ModelState for each model representing the state of the model after encoding the source.
 
         :param source: Source ids. Shape: (1, bucket_key).
         :param source_length: Bucket key.
         :param source_graph: Input graph.
+        :param source_positions: Input graph positions
         :return: List of ModelStates.
         """
-        return [ModelState(states=m.run_encoder(source, source_length, source_graph)) for m in self.models]
+        return [ModelState(states=m.run_encoder(source, source_length, source_graph, source_positions)) for m in self.models]
 
     def _decode_step(self,
                      sequences: mx.nd.NDArray,
@@ -854,7 +907,8 @@ class Translator:
     def _beam_search(self,
                      source: mx.nd.NDArray,
                      source_length: int,
-                     source_graph: mx.nd.NDArray) -> Tuple[mx.nd.NDArray, mx.nd.NDArray, mx.nd.NDArray, mx.nd.NDArray]:
+                     source_graph: mx.nd.NDArray,
+                     source_positions: mx.nd.NDArray) -> Tuple[mx.nd.NDArray, mx.nd.NDArray, mx.nd.NDArray, mx.nd.NDArray]:
         """
         Translates a single sentence using beam search.
 
@@ -894,7 +948,7 @@ class Translator:
         self.pad_dist[:] = np.inf
 
         # (0) encode source sentence
-        model_states = self._encode(source, source_length, source_graph)
+        model_states = self._encode(source, source_length, source_graph, source_positions)
 
         for t in range(1, max_output_length):
 
