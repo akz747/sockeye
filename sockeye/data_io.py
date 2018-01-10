@@ -738,6 +738,8 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
                     self.bucket_batch_sizes[-1].average_words_per_batch + self.batch_num_devices * average_seq_len)
 
     def _convert_to_array(self):
+        from collections import Counter
+        max_dists = Counter()
         for i in range(len(self.data_source)):
             self.data_source[i] = np.asarray(self.data_source[i], dtype=self.dtype)
             self.data_target[i] = np.asarray(self.data_target[i], dtype=self.dtype)
@@ -746,6 +748,13 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
             # GCN
             self.data_src_graphs[i] = self._convert_to_adj_matrix(self.buckets[i][0], self.data_src_graphs[i])
             self.data_src_positions[i] = self._get_graph_positions(self.buckets[i][0], self.data_src_graphs[i])
+            try:
+                max_dist = np.max(self.data_src_positions[i], axis=1)
+                for val in max_dist:
+                    max_dists[val] += 1
+            except ValueError:
+                max_dist = 0
+            #logger.info(max_dist)
             #logger.info("SRC_METADATA SHAPE: " + str(self.data_src_metadata[i].shape))
             #####
             
@@ -776,6 +785,7 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
                     #logger.info('Shapes after replication')
                     #logger.info(self.data_source[i].shape)
                     #logger.info(self.data_src_metadata[i].shape)
+        logger.info(max_dists)
                     
     def _convert_to_adj_matrix(self, bucket_size, data_src_graphs):
         """
@@ -806,7 +816,7 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
         Precalculate graph positions according to the distance from the root.
         """
         batch_size = data_src_graphs.shape[0]
-        positions = np.array([np.ones(bucket_size) * 1000 for sent in range(batch_size)])
+        positions = np.array([np.ones(bucket_size) * -1000 for sent in range(batch_size)])
         for i, adj in enumerate(data_src_graphs):
             dist = 0
             curr_node = self._find_root(adj)
@@ -838,7 +848,7 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
         #print(list(tups))
         for i, edge in tups:
             if edge:
-                if positions[i] == 1000:
+                if positions[i] == -1000:
                     #print('UPDATED')
                     # not updated yet
                     positions[i] = dist
