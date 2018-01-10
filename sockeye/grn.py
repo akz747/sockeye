@@ -349,7 +349,14 @@ class GatedGRNCell(object):
         self._dropout_mask = mx.sym.Dropout(data=mx.sym.ones_like(outputs), p=self._dropout)
 
         # Convolutions
-        for i in range(self._num_layers):
+        if self._num_layers == 0:
+            # Dynamic unrolling
+            num_layers = seq_len
+            logger.info("LAYERS: %d" % num_layers)
+        else:
+            num_layers = self._num_layers
+        
+        for i in range(num_layers):
             reset_outputs = self._reset(adj, outputs, seq_len)
             convolved = self._single_convolve(adj, reset_outputs, seq_len)
             outputs = self._update(adj, outputs, convolved, seq_len)

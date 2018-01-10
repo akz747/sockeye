@@ -534,8 +534,8 @@ def add_model_parameters(params):
                               help="Put a GRN layer on top of the encoder. Default: %(default)s")
     model_params.add_argument('--grn-edge-gating', action="store_true",
                               help="Activate edge gating for the GRN encoder (use only with --use-grn). Default: %(default)s")
-    model_params.add_argument('--grn-num-layers', type=int_greater_or_equal(1),
-                              default=1,
+    model_params.add_argument('--grn-num-layers', type=int_greater_or_equal(0),
+                              default=0,
                               help="Number of layers for GRN encoder (use only with --use-grn). Default: %(default)s.")
     model_params.add_argument('--grn-no-residual', action="store_true",
                               help="Do not use residual connections in GRNs. Default: %(default)s")

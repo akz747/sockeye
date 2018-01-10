@@ -532,6 +532,8 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
         self.data_label_average_len = [0 for _ in self.buckets]
         self.data_src_graphs = [[] for _ in self.buckets]
         self.data_src_positions = [[] for _ in self.buckets]
+        # GCN/GRN max depths per bucket, used to unroll layers
+        self.data_src_depths = [0 for _ in self.buckets]
         
         # Per-bucket batch sizes (num seq, num word)
         # If not None, populated as part of assigning to buckets
@@ -738,9 +740,10 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
                     self.bucket_batch_sizes[-1].average_words_per_batch + self.batch_num_devices * average_seq_len)
 
     def _convert_to_array(self):
-        from collections import Counter
-        max_dists = Counter()
+        #from collections import Counter
+        #max_dists = Counter()
         for i in range(len(self.data_source)):
+            # This loop iterates over buckets
             self.data_source[i] = np.asarray(self.data_source[i], dtype=self.dtype)
             self.data_target[i] = np.asarray(self.data_target[i], dtype=self.dtype)
             self.data_label[i] = np.asarray(self.data_label[i], dtype=self.dtype)
@@ -749,11 +752,11 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
             self.data_src_graphs[i] = self._convert_to_adj_matrix(self.buckets[i][0], self.data_src_graphs[i])
             self.data_src_positions[i] = self._get_graph_positions(self.buckets[i][0], self.data_src_graphs[i])
             try:
-                max_dist = np.max(self.data_src_positions[i], axis=1)
-                for val in max_dist:
-                    max_dists[val] += 1
+                max_depth = np.max(self.data_src_positions[i])
             except ValueError:
-                max_dist = 0
+                # empty bucket
+                max_depth = 0
+            self.data_src_depths[i] = int(max_depth)
             #logger.info(max_dist)
             #logger.info("SRC_METADATA SHAPE: " + str(self.data_src_metadata[i].shape))
             #####
@@ -785,7 +788,6 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
                     #logger.info('Shapes after replication')
                     #logger.info(self.data_source[i].shape)
                     #logger.info(self.data_src_metadata[i].shape)
-        logger.info(max_dists)
                     
     def _convert_to_adj_matrix(self, bucket_size, data_src_graphs):
         """
@@ -932,9 +934,17 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
         provide_label = [mx.io.DataDesc(name=n, shape=x.shape, layout=C.BATCH_MAJOR) for n, x in
                          zip(self.label_names, label)]
 
+        #######
+        # GCN/GRN: this is where we trick the module with respect to the
+        # source sequence lens, passing graph depths instead
+
+        #new_bucket_key=(self.data_src_depths[i], self.buckets[i][1])
+        #new_bucket_key = self.buckets[i]
+        new_bucket_key = (self.buckets[i][0], self.buckets[i][1], self.data_src_depths[i])
+        
         # TODO: num pad examples is not set here if fillup strategy would be padding
         return mx.io.DataBatch(data, label,
-                               pad=0, index=None, bucket_key=self.buckets[i],
+                               pad=0, index=None, bucket_key=new_bucket_key,
                                provide_data=provide_data, provide_label=provide_label)
 
     def save_state(self, fname: str):

@@ -108,19 +108,21 @@ class TrainingModel(model.SockeyeModel):
         data_names = [x[0] for x in train_iter.provide_data]
         label_names = [x[0] for x in train_iter.provide_label]
 
+
         def sym_gen(seq_lens):
             """
             Returns a (grouped) loss symbol given source & target input lengths.
             Also returns data and label names for the BucketingModule.
             """
-            source_seq_len, target_seq_len = seq_lens
+            source_seq_len, target_seq_len, source_depth = seq_lens
 
             (source_encoded,
              source_encoded_length,
              source_encoded_seq_len) = self.encoder.encode(source, source_length,
                                                            seq_len=source_seq_len,
                                                            metadata=(source_graphs,
-                                                                     source_positions))
+                                                                     source_positions,
+                                                                     source_depth))
 
             source_lexicon = self.lexicon.lookup(source) if self.lexicon else None
 
@@ -131,11 +133,19 @@ class TrainingModel(model.SockeyeModel):
 
             return mx.sym.Group(outputs), data_names, label_names
 
+        ############
+        # GCN/GRN
+        # Update default_bucket_key
+        default_bucket_key = (train_iter.default_bucket_key[0],
+                              train_iter.default_bucket_key[1],
+                              int(np.max(train_iter.data_src_depths)))
+        #default_bucket_key = train_iter.default_bucket_key
+        
         if self.bucketing:
-            logger.info("Using bucketing. Default max_seq_len=%s", train_iter.default_bucket_key)
+            logger.info("Using bucketing. Default max_seq_len=%s", default_bucket_key)
             return mx.mod.BucketingModule(sym_gen=sym_gen,
                                           logger=logger,
-                                          default_bucket_key=train_iter.default_bucket_key,
+                                          default_bucket_key=default_bucket_key,
                                           context=self.context)
         else:
             logger.info("No bucketing. Unrolled to (%d,%d)",

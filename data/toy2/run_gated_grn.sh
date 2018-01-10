@@ -9,7 +9,7 @@ python -m sockeye.train --source data/toy2/train.en.tok \
     --grn-type gated \
     --grn-activation tanh \
     --grn-edge-gating \
-    --grn-num-layers 2 \
+    --grn-num-layers 0 \
     --output toy_model \
     --batch-size 2 \
     --rnn-num-hidden 32 \

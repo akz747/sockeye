@@ -1577,7 +1577,8 @@ class GatedGraphRecEncoder(Encoder):
         """
         # Assumes metadata is (adj, positions)
         adj = metadata[0]
-        outputs = self._gatedgrn.convolve(adj, data, seq_len)
+        depth = metadata[2]
+        outputs = self._gatedgrn.convolve(adj, data, depth)
         return outputs, data_length, seq_len
 
     def get_num_hidden(self) -> int:
