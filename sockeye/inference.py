@@ -91,7 +91,8 @@ class InferenceModel(model.SockeyeModel):
         :param max_input_length: Maximum input length.
         :param get_max_output_length_function: Callable to compute maximum output length.
         """
-        self.max_input_length = max_input_length
+        self.max_input_length = int(max_input_length / 2)
+        logger.info(self.max_input_length)
         if self.max_input_length > self.training_max_seq_len_source:
             logger.warning("Model was only trained with sentences up to a length of %d, "
                            "but a max_input_len of %d is used.",
