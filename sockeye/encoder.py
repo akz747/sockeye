@@ -178,6 +178,7 @@ class GatedGraphRecEncoderConfig(Config):
                  num_embed: int,
                  embed_dropout: float,
                  gatedgrn_config: grn.GatedGRNConfig,
+                 num_networks: int,
                  pos_embeddings: bool,
                  max_seq_len: int,
                  skip_rnn: bool,
@@ -188,6 +189,7 @@ class GatedGraphRecEncoderConfig(Config):
         self.num_embed = num_embed
         self.embed_dropout = embed_dropout
         self.gatedgrn_config = gatedgrn_config
+        self.num_networks = num_networks
         self.pos_embeddings = pos_embeddings
         self.max_seq_len = max_seq_len
         self.skip_rnn = skip_rnn
@@ -429,9 +431,10 @@ def get_gatedgrn_encoder(config: GatedGraphRecEncoderConfig,
         encoders.append(AddGraphLearnedPositionalEmbeddings(num_embed=config.num_embed,
                                                             max_seq_len=config.max_seq_len,
                                                            prefix=C.SOURCE_GRAPH_POSITIONAL_EMBEDDING_PREFIX))
-    
-    encoders.append(GatedGraphRecEncoder(config=config.gatedgrn_config,
-                                         prefix=C.GATEDGRN_PREFIX))
+
+    for i in range(config.num_networks):
+        encoders.append(GatedGraphRecEncoder(config=config.gatedgrn_config,
+                                             prefix=("%d_" % i)+C.GATEDGRN_PREFIX))
 
     encoders.append(BatchMajor2TimeMajor())
     logger.info(encoders)

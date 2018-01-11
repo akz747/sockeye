@@ -537,6 +537,9 @@ def add_model_parameters(params):
     model_params.add_argument('--grn-num-layers', type=int_greater_or_equal(1),
                               default=1,
                               help="Number of layers for GRN encoder (use only with --use-grn). Default: %(default)s.")
+    model_params.add_argument('--grn-num-networks', type=int_greater_or_equal(1),
+                              default=1,
+                              help="Number of networks. Unlike layers, different stacked networks have different parameter sets. Each network is assumed to have grn-num-layers.")
     model_params.add_argument('--grn-no-residual', action="store_true",
                               help="Do not use residual connections in GRNs. Default: %(default)s")
     model_params.add_argument('--grn-activation', type=str,
