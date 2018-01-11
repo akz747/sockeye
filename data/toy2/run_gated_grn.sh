@@ -10,12 +10,12 @@ python -m sockeye.train --source data/toy2/train.en.tok \
     --grn-activation tanh \
     --grn-edge-gating \
     --grn-num-layers 2 \
-    --grn-num-networks 2 \
+    --grn-num-networks 1 \
     --output toy_model \
     --batch-size 2 \
     --rnn-num-hidden 32 \
     --num-embed 32 \
-    --grn-num-hidden 32 \
+    --grn-num-hidden 2 \
     --checkpoint-frequency 50 \
     --edge-vocab data/toy2/edge_vocab.json \
     --overwrite-output \

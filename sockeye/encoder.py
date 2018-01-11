@@ -425,16 +425,17 @@ def get_gatedgrn_encoder(config: GatedGraphRecEncoderConfig,
                                                 layout=C.TIME_MAJOR))
         encoders.append(TimeMajor2BatchMajor())
 
-    if config.pos_embeddings:
-        #encoders.append(AddGraphSinCosPositionalEmbeddings(num_embed=config.num_embed,
-        #                                                   prefix=C.SOURCE_GRAPH_POSITIONAL_EMBEDDING_PREFIX))
-        encoders.append(AddGraphLearnedPositionalEmbeddings(num_embed=config.num_embed,
-                                                            max_seq_len=config.max_seq_len,
-                                                           prefix=C.SOURCE_GRAPH_POSITIONAL_EMBEDDING_PREFIX))
-
     for i in range(config.num_networks):
         encoders.append(GatedGraphRecEncoder(config=config.gatedgrn_config,
                                              prefix=("%d_" % i)+C.GATEDGRN_PREFIX))
+        
+    if config.pos_embeddings:
+        #encoders.append(AddGraphSinCosPositionalEmbeddings(num_embed=config.num_embed,
+        #                                                   prefix=C.SOURCE_GRAPH_POSITIONAL_EMBEDDING_PREFIX))
+        encoders.append(ConcatGraphLearnedPositionalEmbeddings(num_embed=config.num_embed,
+                                                            max_seq_len=config.max_seq_len,
+                                                           prefix=C.SOURCE_GRAPH_POSITIONAL_EMBEDDING_PREFIX))
+
 
     encoders.append(BatchMajor2TimeMajor())
     logger.info(encoders)
@@ -600,7 +601,7 @@ class Embedding(Encoder):
         """
         return self.num_embed
 
-
+    
 class PositionalEncoder(Encoder):
     @abstractmethod
     def encode_positions(self,
@@ -902,6 +903,80 @@ class AddGraphLearnedPositionalEmbeddings(PositionalEncoder):
                                          output_dim=self.num_embed,
                                          name=self.prefix + "pos_embed")
         return mx.sym.broadcast_add(data, pos_embedding, name="%s_add" % self.prefix), data_length, seq_len
+
+    def encode_positions(self,
+                         positions: mx.sym.Symbol,
+                         data: mx.sym.Symbol) -> mx.sym.Symbol:
+        """
+        :param positions: (batch_size,)
+        :param data: (batch_size, num_embed)
+        :return: (batch_size, num_embed)
+        """
+
+        # (batch_size, source_seq_len, num_embed)
+        pos_embedding = mx.sym.Embedding(data=positions,
+                                         input_dim=self.max_seq_len,
+                                         weight=self.embed_weight,
+                                         output_dim=self.num_embed,
+                                         name=self.prefix + "pos_embed")
+        return mx.sym.broadcast_add(data, pos_embedding, name="%s_add" % self.prefix)
+
+    def get_num_hidden(self) -> int:
+        return self.num_embed
+
+    def get_max_seq_len(self) -> Optional[int]:
+        # we can only support sentences as long as the maximum length during training.
+        return self.max_seq_len
+
+
+class ConcatGraphLearnedPositionalEmbeddings(PositionalEncoder):
+    """
+    Takes an encoded sequence and concats positional embeddings to it, which are learned jointly. Note that this will
+    limited the maximum sentence length during decoding.
+
+    :param num_embed: Embedding size.
+    :param max_seq_len: Maximum sequence length.
+    :param prefix: Name prefix for symbols of this encoder.
+    :param embed_weight: Optionally use an existing embedding matrix instead of creating a new one.
+    """
+
+    def __init__(self,
+                 num_embed: int,
+                 max_seq_len: int,
+                 prefix: str,
+                 embed_weight: Optional[mx.sym.Symbol] = None) -> None:
+        self.num_embed = num_embed
+        self.max_seq_len = max_seq_len
+        self.prefix = prefix
+        if embed_weight is not None:
+            self.embed_weight = embed_weight
+        else:
+            self.embed_weight = mx.sym.Variable(prefix + "weight")
+
+    def encode(self,
+               data: mx.sym.Symbol,
+               data_length: Optional[mx.sym.Symbol],
+               seq_len: int,
+               metadata=None) -> Tuple[mx.sym.Symbol, mx.sym.Symbol, int]:
+        """
+        :param data: (batch_size, source_seq_len, num_embed)
+        :param data_length: (batch_size,)
+        :param seq_len: sequence length.
+        :return: (batch_size, source_seq_len, num_embed)
+        """
+
+        # (1, source_seq_len)
+        #positions = mx.sym.expand_dims(data=mx.sym.arange(start=0, stop=seq_len, step=1), axis=0)
+        positions = metadata[1]
+
+        # (1, source_seq_len, num_embed)
+        pos_embedding = mx.sym.Embedding(data=positions,
+                                         input_dim=self.max_seq_len,
+                                         weight=self.embed_weight,
+                                         output_dim=self.num_embed,
+                                         name=self.prefix + "pos_embed")
+        #return mx.sym.broadcast_add(data, pos_embedding, name="%s_add" % self.prefix), data_length, seq_len
+        return mx.sym.concat(data, pos_embedding, dim=2, name="%s_concat" % self.prefix), data_length, seq_len
 
     def encode_positions(self,
                          positions: mx.sym.Symbol,
