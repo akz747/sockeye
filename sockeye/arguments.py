@@ -562,6 +562,10 @@ def add_model_parameters(params):
                               help="Normalize hidden vector calculations in GRN. Default: %(default)s")
     model_params.add_argument('--grn-positional', action="store_true",
                               help="Add graph positional embeddings before GRN")
+    model_params.add_argument('--grn-pos-embed',
+                              type=int_greater_or_equal(1),
+                              default=32,
+                              help='Dimensionality of positional embeddings (use only with --use-grn). Default: %(default)s.')
     #####
 
     

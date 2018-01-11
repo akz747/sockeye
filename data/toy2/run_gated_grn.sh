@@ -14,8 +14,8 @@ python -m sockeye.train --source data/toy2/train.en.tok \
     --output toy_model \
     --batch-size 2 \
     --rnn-num-hidden 32 \
-    --num-embed 32 \
-    --grn-num-hidden 2 \
+    --num-embed 12:32 \
+    --grn-num-hidden 32 \
     --checkpoint-frequency 50 \
     --edge-vocab data/toy2/edge_vocab.json \
     --overwrite-output \
@@ -23,6 +23,7 @@ python -m sockeye.train --source data/toy2/train.en.tok \
     --grn-dropout 0.5 \
     --grn-norm \
     --grn-positional \
+    --grn-pos-embed 20 \
     --skip-rnn
 #    --skip-rnn
 #    --weight-tying \
