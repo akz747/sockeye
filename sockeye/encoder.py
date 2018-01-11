@@ -425,9 +425,7 @@ def get_gatedgrn_encoder(config: GatedGraphRecEncoderConfig,
                                                 layout=C.TIME_MAJOR))
         encoders.append(TimeMajor2BatchMajor())
 
-    for i in range(config.num_networks):
-        encoders.append(GatedGraphRecEncoder(config=config.gatedgrn_config,
-                                             prefix=("%d_" % i)+C.GATEDGRN_PREFIX))
+
         
     if config.pos_embeddings:
         #encoders.append(AddGraphSinCosPositionalEmbeddings(num_embed=config.num_embed,
@@ -436,7 +434,18 @@ def get_gatedgrn_encoder(config: GatedGraphRecEncoderConfig,
                                                             max_seq_len=config.max_seq_len,
                                                            prefix=C.SOURCE_GRAPH_POSITIONAL_EMBEDDING_PREFIX))
 
-
+    new_gatedgrn_config = grn.GatedGRNConfig(input_dim=config.num_embed * 2,
+                                             output_dim=config.num_embed * 2,
+                                             tensor_dim=config.gatedgrn_config.tensor_dim,
+                                             num_layers=config.gatedgrn_config.num_layers,
+                                             activation=config.gatedgrn_config.activation,
+                                             add_gate=config.gatedgrn_config.add_gate,
+                                             dropout=config.gatedgrn_config.dropout,
+                                             norm=config.gatedgrn_config.norm)
+    for i in range(config.num_networks):
+        encoders.append(GatedGraphRecEncoder(config=new_gatedgrn_config,
+                                             prefix=("%d_" % i)+C.GATEDGRN_PREFIX))
+        
     encoders.append(BatchMajor2TimeMajor())
     logger.info(encoders)
     return EncoderSequence(encoders)
