@@ -341,6 +341,7 @@ class GatedGRNCell(object):
         if self._input_dim != self._output_dim:
             outputs = mx.symbol.dot(inputs, self._first_W)
             outputs = mx.symbol.broadcast_add(outputs, self._first_b)
+            outputs = mx.symbol.Activation(outputs, act_type=self._activation)
         else:
             outputs = inputs
 

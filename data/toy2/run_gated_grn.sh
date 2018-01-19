@@ -23,7 +23,7 @@ python -m sockeye.train --source data/toy2/train.en.tok \
     --grn-dropout 0.5 \
     --grn-norm \
     --grn-positional \
-    --grn-pos-embed 20 \
+    --grn-pos-embed 12 \
     --skip-rnn
 #    --skip-rnn
 #    --weight-tying \
