@@ -434,6 +434,7 @@ def get_gatedgrn_encoder(config: GatedGraphRecEncoderConfig,
         #                                                   prefix=C.SOURCE_GRAPH_POSITIONAL_EMBEDDING_PREFIX))
         encoders.append(ConcatGraphLearnedPositionalEmbeddings(num_embed=config.pos_num_embed,
                                                                max_seq_len=config.max_seq_len,
+                                                               dropout=config.embed_dropout,
                                                                prefix=C.SOURCE_GRAPH_POSITIONAL_EMBEDDING_PREFIX))
 
     new_gatedgrn_config = grn.GatedGRNConfig(input_dim=config.num_embed + config.pos_num_embed,
@@ -954,10 +955,12 @@ class ConcatGraphLearnedPositionalEmbeddings(PositionalEncoder):
     def __init__(self,
                  num_embed: int,
                  max_seq_len: int,
+                 dropout: float,
                  prefix: str,
                  embed_weight: Optional[mx.sym.Symbol] = None) -> None:
         self.num_embed = num_embed
         self.max_seq_len = max_seq_len
+        self.dropout = dropout
         self.prefix = prefix
         if embed_weight is not None:
             self.embed_weight = embed_weight
@@ -987,6 +990,9 @@ class ConcatGraphLearnedPositionalEmbeddings(PositionalEncoder):
                                          output_dim=self.num_embed,
                                          name=self.prefix + "pos_embed")
         #return mx.sym.broadcast_add(data, pos_embedding, name="%s_add" % self.prefix), data_length, seq_len
+        if self.dropout > 0:
+            pos_embedding = mx.sym.Dropout(data=pos_embedding, p=self.dropout, name="source_pos_embed_dropout")
+
         return mx.sym.concat(data, pos_embedding, dim=2, name="%s_concat" % self.prefix), data_length, seq_len
 
     def encode_positions(self,
