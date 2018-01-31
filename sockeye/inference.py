@@ -692,8 +692,10 @@ class Translator:
             logger.debug("Input (%d) exceeds max input length (%d). Splitting into chunks of size %d.",
                          len(trans_input.tokens), self.buckets_source[-1], self.max_input_length)
             token_chunks = utils.chunks(trans_input.tokens, self.max_input_length)
-            translations = [self.translate_nd(*self._get_inference_input(tokens))
-                            for tokens in token_chunks]
+            logger.debug("WARNING: graphs will also be split, and there is no guarantee the splits will be consistent!!!")
+            graph_chunks = utils.chunks(trans_input.graph, self.max_input_length)
+            translations = [self.translate_nd(*self._get_inference_input(tokens, graphs))
+                            for tokens, graphs in zip(token_chunks, graph_chunks)]
             translation = self._concat_translations(translations)
             return self._make_result(trans_input, translation)
         else:
