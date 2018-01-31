@@ -337,17 +337,24 @@ class GatedGRNCell(object):
         A linear transformation is required in case the input dimensionality is
         different from GRN output dimensionality.
         """
+        # Dropout is applied on inputs
+        if self._dropout != 0.0:
+            print("DROPOUT: %f" % self._dropout)
+            inputs = mx.sym.Dropout(inputs, p=self._dropout)
+        
         # Transformation to match dims
         if self._input_dim != self._output_dim:
             outputs = mx.symbol.dot(inputs, self._first_W)
             outputs = mx.symbol.broadcast_add(outputs, self._first_b)
+            # Sounded like a sensible idea but didn't really work...
+            # I guess because ReLU?
             #outputs = mx.symbol.Activation(outputs, act_type=self._activation)
         else:
             outputs = inputs
 
         # Variational/Bayesian Dropout mask. Mask does not change between layers.
         #if self._dropout_mask is None:
-        self._dropout_mask = mx.sym.Dropout(data=mx.sym.ones_like(outputs), p=self._dropout)
+        #self._dropout_mask = mx.sym.Dropout(data=mx.sym.ones_like(outputs), p=self._dropout)
 
         # Convolutions
         for i in range(self._num_layers):
