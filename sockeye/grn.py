@@ -363,7 +363,7 @@ class GatedGRNCell(object):
             outputs = self._update(adj, outputs, convolved, seq_len)
             #if self._dropout != 0.0:
             #    outputs = mx.symbol.Dropout(outputs, p=self._dropout)
-            outputs = outputs * self._dropout_mask
+            #outputs = outputs * self._dropout_mask
             #outputs = outputs * mx.sym.Dropout(data=mx.sym.ones_like(outputs), p=self._dropout)
             #outputs = outputs * mx.sym.ones_like(outputs)
         return outputs
