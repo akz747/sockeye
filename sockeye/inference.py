@@ -719,6 +719,8 @@ class Translator:
         ########
         # GCN
         new_graph = mx.nd.zeros((1, bucket_key, bucket_key))
+        # gaaaaaah!!!!
+        self_id = 3 
         for tup in graph:
             if (tup[0] < bucket_key) and (tup[1] < bucket_key):
                 # Stripping for graphs as well
