@@ -720,7 +720,7 @@ class Translator:
         # GCN
         new_graph = mx.nd.zeros((1, bucket_key, bucket_key))
         # gaaaaaah!!!!
-        self_id = 3 
+        self_id = 3
         for tup in graph:
             if (tup[0] < bucket_key) and (tup[1] < bucket_key):
                 # Stripping for graphs as well
@@ -922,6 +922,10 @@ class Translator:
         :return List of lists of word ids, list of attentions, array of accumulated length-normalized
                 negative log-probs.
         """
+        #logger.info("BEAM SEARCH")
+        #logger.info(source.asnumpy())
+        #logger.info(source_graph.asnumpy())
+        #logger.info(source_positions.asnumpy())
         # Length of encoded sequence (may differ from initial input length)
         encoded_source_length = self.models[0].encoder.get_encoded_seq_len(source_length)
 
@@ -973,7 +977,11 @@ class Translator:
                 scores = (scores + scores_accumulated * self.length_penalty(lengths - 1)) / self.length_penalty(lengths)
                 # ... but not for finished hyps.
                 # their predicted distribution is set to their accumulated scores at C.PAD_ID.
-                self.pad_dist[:, C.PAD_ID] = scores_accumulated
+                #logger.info("PADDST")
+                #logger.info(self.pad_dist[:, C.PAD_ID].asnumpy())
+                #scores_accumulated = scores_accumulated.reshape(shape=(-1,))
+                #logger.info(scores_accumulated.asnumpy())
+                self.pad_dist[:, C.PAD_ID] = scores_accumulated.reshape(shape=(-1,))
                 # this is equivalent to doing this in numpy:
                 #   self.pad_dist[finished, :] = np.inf
                 #   self.pad_dist[finished, C.PAD_ID] = scores_accumulated[finished]
@@ -994,8 +1002,12 @@ class Translator:
             attentions = mx.nd.take(attentions, best_hyp_indices)
 
             # (5) update best hypotheses, their attention lists and lengths (only for non-finished hyps)
-            sequences[:, t] = mx.nd.expand_dims(best_word_indices, axis=1)
-            attentions[:, t, :] = mx.nd.expand_dims(attention_scores, axis=1)
+            #logger.info(sequences.asnumpy())
+            #logger.info(best_word_indices.asnumpy())
+            sequences[:, t] = best_word_indices
+            #sequences[:, t] = mx.nd.expand_dims(best_word_indices, axis=1)
+            attentions[:, t, :] = attention_scores
+            #attentions[:, t, :] = mx.nd.expand_dims(attention_scores, axis=1)
             lengths += mx.nd.cast(1 - mx.nd.expand_dims(finished, axis=1), dtype='float32')
 
             # (6) determine which hypotheses in the beam are now finished
