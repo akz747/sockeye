@@ -59,7 +59,10 @@ def build_vocab(data: Iterable[str], num_words: int = 50000, min_count: int = 1)
     :return: Word-to-id mapping.
     """
     vocab_symbols_set = set(C.VOCAB_SYMBOLS)
-    raw_vocab = Counter(token for line in data for token in get_tokens(line)
+    #raw_vocab = Counter(token for line in data for token in get_tokens(line)
+    #                    if token not in vocab_symbols_set)
+    ##### GGNN WEIGHTS
+    raw_vocab = Counter(token.split('|||')[0] for line in data for token in get_tokens(line)
                         if token not in vocab_symbols_set)
     logger.info("Initial vocabulary: %d types" % len(raw_vocab))
 
