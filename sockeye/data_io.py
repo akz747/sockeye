@@ -451,9 +451,11 @@ def process_edges(graph_tokens: Iterable[str], vocab: Dict[str, int]): #TODO: ad
     :param graph_tokens: List of tokens containing graph edges.
     :return: List of (int, int) tuples
     """
-    adj_list = [(int(tok[1:-1].split(',')[0]),
-                 int(tok[1:-1].split(',')[1]),
-                 vocab[tok[1:-1].split(',')[2]]) for tok in graph_tokens]
+    edges = [tok[1:-1].split(',') for tok in graph_tokens]
+    adj_list = [(int(e[0]),
+                 int(e[1]),
+                 vocab[e[2]],
+                 float(e[3])) for e in edges]
     return adj_list
     
 
@@ -531,6 +533,7 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
         self.data_label = [[] for _ in self.buckets]  # type: ignore
         self.data_label_average_len = [0 for _ in self.buckets]
         self.data_src_graphs = [[] for _ in self.buckets]
+        self.data_src_weights = [[] for _ in self.buckets]
         self.data_src_positions = [[] for _ in self.buckets]
         
         # Per-bucket batch sizes (num seq, num word)
@@ -550,6 +553,7 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
         # other parts of the model, but it is possible that some architectures will have intermediate
         # operations that produce shapes larger than the default bucket size.  In these cases, MXNet
         # will silently allocate additional memory.
+        self.src_weights_name = "src_node_weights"
         self.provide_data = [
             mx.io.DataDesc(name=source_data_name,
                            shape=(self.bucket_batch_sizes[-1].batch_size, self.default_bucket_key[0]),
@@ -562,6 +566,10 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
                                   self.default_bucket_key[0],
                                   self.default_bucket_key[0]),
                            layout=C.BATCH_MAJOR),
+            mx.io.DataDesc(name=self.src_weights_name,
+                           shape=(self.bucket_batch_sizes[-1].batch_size,
+                                  self.default_bucket_key[0]),
+                           layout=C.BATCH_MAJOR),
             mx.io.DataDesc(name=src_positions_name,
                            shape=(self.bucket_batch_sizes[-1].batch_size,
                                   self.default_bucket_key[0]),
@@ -572,7 +580,7 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
                            shape=(self.bucket_batch_sizes[-1].batch_size, self.default_bucket_key[1]),
                            layout=C.BATCH_MAJOR)]
 
-        self.data_names = [self.source_data_name, self.target_data_name, self.src_graphs_name, self.src_positions_name]
+        self.data_names = [self.source_data_name, self.target_data_name, self.src_graphs_name, self.src_weights_name, self.src_positions_name]
         self.label_names = [self.label_name]
         logger.info(self.data_names)
         logger.info(self.label_names)
@@ -597,6 +605,7 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
         #####
         # GCN
         self.nd_src_graphs = []
+        self.nd_src_weights = []
         self.nd_src_positions = []
 
         self.reset()
@@ -647,6 +656,7 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
             self.data_src_graphs[buck_idx].append(src_graph)
             # just fill empty lists here, these will be updated when
             # converting the data.
+            self.data_src_weights[buck_idx].append([])
             self.data_src_positions[buck_idx].append([])
             #####
 
@@ -747,6 +757,7 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
             #####
             # GCN
             self.data_src_graphs[i] = self._convert_to_adj_matrix(self.buckets[i][0], self.data_src_graphs[i])
+            self.data_src_weights[i] = self._get_graph_weights(self.buckets[i][0], self.data_src_graphs[i])
             self.data_src_positions[i] = self._get_graph_positions(self.buckets[i][0], self.data_src_graphs[i])
             try:
                 max_dist = np.max(self.data_src_positions[i], axis=1)
@@ -777,9 +788,14 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
                                                         axis=0)
                     ####
                     # GCN: we add an empty list as padding
-                    self.data_src_graphs[i] = np.concatenate((self.data_src_graphs[i], self.data_src_graphs[i][random_indices, :, :]),
+                    self.data_src_graphs[i] = np.concatenate((self.data_src_graphs[i],
+                                                              self.data_src_graphs[i][random_indices, :, :]),
                                                              axis=0)
-                    self.data_src_positions[i] = np.concatenate((self.data_src_positions[i], self.data_src_positions[i][random_indices]),
+                    self.data_src_weights[i] = np.concatenate((self.data_src_weights[i],
+                                                                 self.data_src_weights[i][random_indices]),
+                                                                axis=0)
+                    self.data_src_positions[i] = np.concatenate((self.data_src_positions[i],
+                                                                 self.data_src_positions[i][random_indices]),
                                                                 axis=0)
                     ####
                     #logger.info('Shapes after replication')
