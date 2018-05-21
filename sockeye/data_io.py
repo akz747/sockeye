@@ -118,14 +118,14 @@ def read_parallel_corpus(data_source: str,
     :param vocab_edges: Graph edges vocabulary.
     :return: Tuple of (source sentences, target sentences).
     """
-    source_sentences = read_sentences(data_source, vocab_source, add_bos=False)
+    source_sentences, source_weights = read_sentences(data_source, vocab_source, add_bos=False, weights=True)
     source_graphs = read_graphs(data_source_graphs, vocab_edges)
     target_sentences = read_sentences(data_target, vocab_target, add_bos=True)
     check_condition(len(source_sentences) == len(target_sentences),
                     "Number of source sentences does not match number of target sentences")
     check_condition(len(source_sentences) == len(source_graphs),
                     "Number of source sentences does not match number of source graphs")
-    return source_sentences, target_sentences, source_graphs
+    return source_sentences, target_sentences, source_graphs, source_weights
 
 
 def length_statistics(source_sentences: List[List[Any]], target_sentences: List[List[int]]) -> Tuple[float, float]:
@@ -190,12 +190,13 @@ def get_training_data_iters(source: str, target: str, source_graphs:str,
 
     (train_source_sentences,
      train_target_sentences,
-     train_source_graphs) = read_parallel_corpus(source,
-                                                 target,
-                                                 source_graphs,
-                                                 vocab_source,
-                                                 vocab_target,
-                                                 vocab_edge)
+     train_source_graphs,
+     train_source_weights) = read_parallel_corpus(source,
+                                                  target,
+                                                  source_graphs,
+                                                  vocab_source,
+                                                  vocab_target,
+                                                  vocab_edge)
 
     max_observed_source_len = max((len(s) for s in train_source_sentences if len(s) <= max_seq_len_source), default=0)
     max_observed_target_len = max((len(t) for t in train_target_sentences if len(t) <= max_seq_len_target), default=0)
@@ -213,6 +214,7 @@ def get_training_data_iters(source: str, target: str, source_graphs:str,
     train_iter = ParallelBucketSentenceIter(train_source_sentences,
                                             train_target_sentences,
                                             train_source_graphs,
+                                            train_source_weights,
                                             buckets,
                                             batch_size,
                                             batch_by_words,
@@ -228,15 +230,17 @@ def get_training_data_iters(source: str, target: str, source_graphs:str,
     
     (val_source_sentences,
      val_target_sentences,
-     val_src_graphs) = read_parallel_corpus(validation_source,
-                                               validation_target,
-                                               val_source_graphs,
-                                               vocab_source,
-                                               vocab_target,
-                                               vocab_edge)
+     val_src_graphs,
+     val_src_weights) = read_parallel_corpus(validation_source,
+                                             validation_target,
+                                             val_source_graphs,
+                                             vocab_source,
+                                             vocab_target,
+                                             vocab_edge)
     val_iter = ParallelBucketSentenceIter(val_source_sentences,
                                           val_target_sentences,
                                           val_src_graphs,
+                                          val_src_weights,
                                           buckets,
                                           batch_size,
                                           batch_by_words,
@@ -358,7 +362,7 @@ def tokens2ids(tokens: Iterable[str], vocab: Dict[str, int]) -> List[int]:
     return [vocab.get(w, vocab[C.UNK_SYMBOL]) for w in tokens]
 
 
-def read_sentences(path: str, vocab: Dict[str, int], add_bos=False, limit=None) -> List[List[int]]:
+def read_sentences(path: str, vocab: Dict[str, int], add_bos=False, weights=False, limit=None) -> List[List[int]]:
     """
     Reads sentences from path and creates word id sentences.
 
@@ -374,14 +378,26 @@ def read_sentences(path: str, vocab: Dict[str, int], add_bos=False, limit=None) 
     assert C.BOS_SYMBOL in vocab
     assert C.EOS_SYMBOL in vocab
     sentences = []
+    _weights = []
     for sentence_tokens in read_content(path, limit):
-        sentence = tokens2ids(sentence_tokens, vocab)
+        #####
+        # GGNN Weights
+        tokens = [tok.split('|||')[0] for tok in sentence_tokens]
+        sentence = tokens2ids(tokens, vocab)
         check_condition(bool(sentence), "Empty sentence in file %s" % path)
         if add_bos:
             sentence.insert(0, vocab[C.BOS_SYMBOL])
+        if weights:
+            weight = [float(tok.split('|||')[1]) for tok in sentence_tokens]
+        else:
+            weight = []
         sentences.append(sentence)
+        _weights.append(weight)
     logger.info("%d sentences loaded from '%s'", len(sentences), path)
-    return sentences
+    if weights:
+        return sentences, _weights
+    else:
+        return sentences
 
 
 def get_default_bucket_key(buckets: List[Tuple[int, int]]) -> Tuple[int, int]:
@@ -454,8 +470,7 @@ def process_edges(graph_tokens: Iterable[str], vocab: Dict[str, int]): #TODO: ad
     edges = [tok[1:-1].split(',') for tok in graph_tokens]
     adj_list = [(int(e[0]),
                  int(e[1]),
-                 vocab[e[2]],
-                 float(e[3])) for e in edges]
+                 vocab[e[2]]) for e in edges]
     return adj_list
     
 
@@ -469,6 +484,7 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
     :param source_sentences: List of source sentences (integer-coded).
     :param target_sentences: List of target sentences (integer-coded).
     :param source_graphs: List of source graphs (tuples of index pairs).
+    :param source_weights: List of weights for nodes.
     :param buckets: List of buckets.
     :param batch_size: Batch_size of generated data batches.
            Incomplete batches are discarded if fill_up == None, or filled up according to the fill_up strategy.
@@ -489,6 +505,7 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
                  source_sentences: List[List[int]],
                  target_sentences: List[List[int]],
                  source_graphs: List[Tuple[int, int, str]],
+                 source_weights: List[List[float]],
                  buckets: List[Tuple[int, int]],
                  batch_size: int,
                  batch_by_words: bool,
@@ -503,6 +520,7 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
                  source_data_name=C.SOURCE_NAME,
                  target_data_name=C.TARGET_NAME,
                  src_graphs_name=C.SOURCE_GRAPHS_NAME,
+                 src_weights_name=C.SOURCE_WEIGHTS_NAME,
                  src_positions_name=C.SOURCE_POSITIONS_NAME,
                  label_name=C.TARGET_LABEL_NAME,
                  dtype='float32') -> None:
@@ -523,6 +541,7 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
         self.source_data_name = source_data_name
         self.target_data_name = target_data_name
         self.src_graphs_name = src_graphs_name
+        self.src_weights_name = src_weights_name
         self.src_positions_name = src_positions_name
         self.label_name = label_name
         self.fill_up = fill_up
@@ -541,7 +560,7 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
         self.bucket_batch_sizes = bucket_batch_sizes
 
         # assign sentence pairs to buckets
-        self._assign_to_buckets(source_sentences, target_sentences, source_graphs)
+        self._assign_to_buckets(source_sentences, target_sentences, source_graphs, source_weights)
 
         # convert to single numpy array for each bucket
         self._convert_to_array()
@@ -553,7 +572,6 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
         # other parts of the model, but it is possible that some architectures will have intermediate
         # operations that produce shapes larger than the default bucket size.  In these cases, MXNet
         # will silently allocate additional memory.
-        self.src_weights_name = "src_node_weights"
         self.provide_data = [
             mx.io.DataDesc(name=source_data_name,
                            shape=(self.bucket_batch_sizes[-1].batch_size, self.default_bucket_key[0]),
@@ -622,7 +640,7 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
 #                break
 #        return bucket
 
-    def _assign_to_buckets(self, source_sentences, target_sentences, source_graphs):
+    def _assign_to_buckets(self, source_sentences, target_sentences, source_graphs, source_weights):
         ndiscard = 0
         tokens_source = 0
         tokens_target = 0
@@ -630,7 +648,10 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
         num_of_unks_target = 0
 
         # Bucket sentences as padded np arrays
-        for source, target, src_graph in zip(source_sentences, target_sentences, source_graphs):
+        for source, target, src_graph, weights in zip(source_sentences,
+                                                      target_sentences,
+                                                      source_graphs,
+                                                      source_weights):
             tokens_source += len(source)
             tokens_target += len(target)
             num_of_unks_source += source.count(self.unk_id)
@@ -656,7 +677,9 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
             self.data_src_graphs[buck_idx].append(src_graph)
             # just fill empty lists here, these will be updated when
             # converting the data.
-            self.data_src_weights[buck_idx].append([])
+            buff_weights = buff_source = np.full((buck[0],), 0.0, dtype=self.dtype)
+            buff_weights[:len(source)] = weights
+            self.data_src_weights[buck_idx].append(buff_weights)
             self.data_src_positions[buck_idx].append([])
             #####
 
@@ -757,7 +780,7 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
             #####
             # GCN
             self.data_src_graphs[i] = self._convert_to_adj_matrix(self.buckets[i][0], self.data_src_graphs[i])
-            self.data_src_weights[i] = self._get_graph_weights(self.buckets[i][0], self.data_src_graphs[i])
+            self.data_src_weights[i] = np.asarray(self.data_src_weights[i], dtype=self.dtype)
             self.data_src_positions[i] = self._get_graph_positions(self.buckets[i][0], self.data_src_graphs[i])
             try:
                 max_dist = np.max(self.data_src_positions[i], axis=1)
@@ -889,6 +912,7 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
         #####
         # GCN
         self.nd_src_graphs = []
+        self.nd_src_weights = []
         self.nd_src_positions = []
         #####
 
@@ -917,6 +941,7 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
         self.nd_target.append(mx.nd.array(self.data_target[bucket].take(shuffled_indices, axis=0), dtype=self.dtype))
         self.nd_label.append(mx.nd.array(self.data_label[bucket].take(shuffled_indices, axis=0), dtype=self.dtype))
         self.nd_src_graphs.append(mx.nd.array(self.data_src_graphs[bucket].take(shuffled_indices, axis=0), dtype=self.dtype))
+        self.nd_src_weights.append(mx.nd.array(self.data_src_weights[bucket].take(shuffled_indices, axis=0), dtype=self.dtype))           
         self.nd_src_positions.append(mx.nd.array(self.data_src_positions[bucket].take(shuffled_indices, axis=0), dtype=self.dtype))           
 
     def iter_next(self) -> bool:
@@ -939,8 +964,9 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
         source = self.nd_source[i][j:j + batch_size_seq]
         target = self.nd_target[i][j:j + batch_size_seq]
         src_graphs = self.nd_src_graphs[i][j:j + batch_size_seq]
+        src_weights = self.nd_src_weights[i][j:j + batch_size_seq]
         src_positions = self.nd_src_positions[i][j:j + batch_size_seq]
-        data = [source, target, src_graphs, src_positions]
+        data = [source, target, src_graphs, src_weights, src_positions]
         label = [self.nd_label[i][j:j + batch_size_seq]]
 
         provide_data = [mx.io.DataDesc(name=n, shape=x.shape, layout=C.BATCH_MAJOR) for n, x in

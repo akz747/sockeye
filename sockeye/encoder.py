@@ -436,12 +436,18 @@ def get_gatedgrn_encoder(config: GatedGraphRecEncoderConfig,
         #                                                       max_seq_len=config.max_seq_len,
         #                                                       dropout=config.embed_dropout,
         #                                                       prefix=C.SOURCE_GRAPH_POSITIONAL_EMBEDDING_PREFIX))
+        encoders.append(ConcatGraphMLPWeightEmbeddings(num_embed=config.pos_num_embed,
+                                                       max_seq_len=config.max_seq_len,
+                                                       dropout=config.embed_dropout,
+                                                       prefix=C.SOURCE_GRAPH_WEIGHT_EMBEDDING_PREFIX))
+
         encoders.append(ConcatGraphMLPPositionalEmbeddings(num_embed=config.pos_num_embed,
                                                            max_seq_len=config.max_seq_len,
                                                            dropout=config.embed_dropout,
                                                            prefix=C.SOURCE_GRAPH_POSITIONAL_EMBEDDING_PREFIX))
 
-    new_gatedgrn_config = grn.GatedGRNConfig(input_dim=config.num_embed + config.pos_num_embed,
+        
+    new_gatedgrn_config = grn.GatedGRNConfig(input_dim=config.num_embed + config.pos_num_embed + config.pos_num_embed,
                                              output_dim=config.gatedgrn_config.output_dim,
                                              tensor_dim=config.gatedgrn_config.tensor_dim,
                                              num_layers=config.gatedgrn_config.num_layers,
@@ -822,7 +828,7 @@ class AddGraphSinCosPositionalEmbeddings(PositionalEncoder):
         :return: (batch_size, source_seq_len, num_embed)
         """
         # Assume metadata is (adj, positions)
-        positions = metadata[1]
+        positions = metadata[2]
         #positions = mx.sym.concat(metadata[0], metadata[1])
         #logger.info('METADATA ' + str(metadata))
         #logger.info(positions.asnumpy())
@@ -910,7 +916,7 @@ class AddGraphLearnedPositionalEmbeddings(PositionalEncoder):
 
         # (1, source_seq_len)
         #positions = mx.sym.expand_dims(data=mx.sym.arange(start=0, stop=seq_len, step=1), axis=0)
-        positions = metadata[1]
+        positions = metadata[2]
 
         # (1, source_seq_len, num_embed)
         pos_embedding = mx.sym.Embedding(data=positions,
@@ -985,7 +991,7 @@ class ConcatGraphLearnedPositionalEmbeddings(PositionalEncoder):
 
         # (1, source_seq_len)
         #positions = mx.sym.expand_dims(data=mx.sym.arange(start=0, stop=seq_len, step=1), axis=0)
-        positions = metadata[1]
+        positions = metadata[2]
 
         # (1, source_seq_len, num_embed)
         pos_embedding = mx.sym.Embedding(data=positions,
@@ -1069,7 +1075,7 @@ class ConcatGraphMLPPositionalEmbeddings(PositionalEncoder):
 
         # (1, source_seq_len)
         #positions = mx.sym.expand_dims(data=mx.sym.arange(start=0, stop=seq_len, step=1), axis=0)
-        positions = metadata[1]
+        positions = metadata[2]
 
         # (1, source_seq_len, num_embed)
         #pos_embedding = mx.sym.concat(data, positions)
@@ -1101,6 +1107,111 @@ class ConcatGraphMLPPositionalEmbeddings(PositionalEncoder):
         #return mx.sym.broadcast_add(data, pos_embedding, name="%s_add" % self.prefix), data_length, seq_len
         if self.dropout > 0:
             pos_embedding = mx.sym.Dropout(data=pos_embedding, p=self.dropout, name="source_pos_embed_dropout")
+
+        return mx.sym.concat(data, pos_embedding, dim=2, name="%s_concat" % self.prefix), data_length, seq_len
+
+    def encode_positions(self,
+                         positions: mx.sym.Symbol,
+                         data: mx.sym.Symbol) -> mx.sym.Symbol:
+        """
+        :param positions: (batch_size,)
+        :param data: (batch_size, num_embed)
+        :return: (batch_size, num_embed)
+        """
+
+        # (batch_size, source_seq_len, num_embed)
+        pos_embedding = mx.sym.Embedding(data=positions,
+                                         input_dim=self.max_seq_len,
+                                         weight=self.embed_weight,
+                                         output_dim=self.num_embed,
+                                         name=self.prefix + "pos_embed")
+        return mx.sym.broadcast_add(data, pos_embedding, name="%s_add" % self.prefix)
+
+    def get_num_hidden(self) -> int:
+        return self.num_embed
+
+    def get_max_seq_len(self) -> Optional[int]:
+        # we can only support sentences as long as the maximum length during training.
+        return self.max_seq_len
+
+
+class ConcatGraphMLPWeightEmbeddings(PositionalEncoder):
+    """
+    Takes an encoded sequence and concats positional embeddings to it, which are learned jointly. Note that this will
+    limited the maximum sentence length during decoding.
+
+    :param num_embed: Embedding size.
+    :param max_seq_len: Maximum sequence length.
+    :param prefix: Name prefix for symbols of this encoder.
+    :param embed_weight: Optionally use an existing embedding matrix instead of creating a new one.
+    """
+
+    def __init__(self,
+                 num_embed: int,
+                 max_seq_len: int,
+                 dropout: float,
+                 prefix: str,
+                 embed_weight: Optional[mx.sym.Symbol] = None) -> None:
+        self.num_embed = num_embed
+        self.max_seq_len = max_seq_len
+        self.dropout = dropout
+        self.prefix = prefix
+        #if embed_weight is not None:
+        #    self.embed_weight = embed_weight
+        #else:
+        #    self.embed_weight = mx.sym.Variable(prefix + "weight")
+        #    self.embed
+        self.embed_w1 = mx.sym.Variable(prefix + "1w_weight", shape=(1, num_embed))
+        self.embed_w2 = mx.sym.Variable(prefix + "2w_weight", shape=(num_embed, num_embed))
+        self.embed_b1 = mx.sym.Variable(prefix + "1w_bias", shape=(num_embed,))
+        self.embed_b2 = mx.sym.Variable(prefix + "2w_bias", shape=(num_embed,))
+
+    def encode(self,
+               data: mx.sym.Symbol,
+               data_length: Optional[mx.sym.Symbol],
+               seq_len: int,
+               metadata=None) -> Tuple[mx.sym.Symbol, mx.sym.Symbol, int]:
+        """
+        :param data: (batch_size, source_seq_len, num_embed)
+        :param data_length: (batch_size,)
+        :param seq_len: sequence length.
+        :return: (batch_size, source_seq_len, num_embed)
+        """
+
+        # (1, source_seq_len)
+        #positions = mx.sym.expand_dims(data=mx.sym.arange(start=0, stop=seq_len, step=1), axis=0)
+        weights = metadata[1]
+
+        # (1, source_seq_len, num_embed)
+        #pos_embedding = mx.sym.concat(data, positions)
+        pos_embedding = weights
+        pos_embedding = mx.sym.expand_dims(pos_embedding, axis=-1)
+        pos_embedding = mx.sym.dot(pos_embedding, self.embed_w1)
+        pos_embedding = mx.sym.broadcast_add(pos_embedding, self.embed_b1)
+        #pos_embedding = mx.sym.FullyConnected(data=positions,
+        #                                      num_hidden=self.num_embed,
+        #                                      flatten=True,
+        #                                      name=self.prefix + "pos_embed_fc_1")
+        pos_embedding = mx.sym.Activation(data=pos_embedding,
+                                          act_type='relu',
+                                          name=self.prefix + "weight_embed_act_1")
+        pos_embedding = mx.sym.dot(pos_embedding, self.embed_w2)
+        pos_embedding = mx.sym.broadcast_add(pos_embedding, self.embed_b2)
+        #pos_embedding = mx.sym.FullyConnected(data=pos_embedding,
+        #                                      num_hidden=self.num_embed,
+        #                                      flatten=True,
+        #                                      name=self.prefix + "pos_embed_fc_2")
+        pos_embedding = mx.sym.Activation(data=pos_embedding,
+                                          act_type='relu',
+                                          name=self.prefix + "weight_embed_act_2")
+        #pos_embedding = mx.sym.Embedding(data=positions,
+        #                                 input_dim=self.max_seq_len,
+        #                                 weight=self.embed_weight,
+        #                                 output_dim=self.num_embed,
+        #                                 name=self.prefix + "pos_embed")
+        #return mx.sym.broadcast_add(data, pos_embedding, name="%s_add" % self.prefix), data_length, seq_len
+        if self.dropout > 0:
+            pos_embedding = mx.sym.Dropout(data=pos_embedding, p=self.dropout, name="source_weight_embed_dropout")
 
         return mx.sym.concat(data, pos_embedding, dim=2, name="%s_concat" % self.prefix), data_length, seq_len
 

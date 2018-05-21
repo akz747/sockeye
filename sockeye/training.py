@@ -98,6 +98,7 @@ class TrainingModel(model.SockeyeModel):
         source = mx.sym.Variable(C.SOURCE_NAME)
         source_length = utils.compute_lengths(source)
         source_graphs = mx.sym.Variable(C.SOURCE_GRAPHS_NAME)
+        source_weights = mx.sym.Variable(C.SOURCE_WEIGHTS_NAME)
         source_positions = mx.sym.Variable(C.SOURCE_POSITIONS_NAME)
         target = mx.sym.Variable(C.TARGET_NAME)
         target_length = utils.compute_lengths(target)
@@ -120,6 +121,7 @@ class TrainingModel(model.SockeyeModel):
              source_encoded_seq_len) = self.encoder.encode(source, source_length,
                                                            seq_len=source_seq_len,
                                                            metadata=(source_graphs,
+                                                                     source_weights,
                                                                      source_positions))
 
             source_lexicon = self.lexicon.lookup(source) if self.lexicon else None
