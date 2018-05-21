@@ -143,13 +143,16 @@ class InferenceModel(model.SockeyeModel):
         def sym_gen(source_seq_len: int):
             source = mx.sym.Variable(C.SOURCE_NAME)
             source_graphs = mx.sym.Variable(C.SOURCE_GRAPHS_NAME)
+            source_weights = mx.sym.Variable(C.SOURCE_WEIGHTS_NAME)
             source_positions = mx.sym.Variable(C.SOURCE_POSITIONS_NAME)
             source_length = utils.compute_lengths(source)
 
             (source_encoded,
              source_encoded_length,
              source_encoded_seq_len) = self.encoder.encode(source, source_length, source_seq_len,
-                                                           metadata=(source_graphs, source_positions))
+                                                           metadata=(source_graphs,
+                                                                     source_weights,
+                                                                     source_positions))
             # TODO(fhieber): Consider standardizing encoders to return batch-major data to avoid this line.
             source_encoded = mx.sym.swapaxes(source_encoded, dim1=0, dim2=1)
 
@@ -158,7 +161,7 @@ class InferenceModel(model.SockeyeModel):
                                                            source_encoded_length,
                                                            source_encoded_seq_len)
 
-            data_names = [C.SOURCE_NAME, C.SOURCE_GRAPHS_NAME, C.SOURCE_POSITIONS_NAME]
+            data_names = [C.SOURCE_NAME, C.SOURCE_GRAPHS_NAME, C.SOURCE_WEIGHTS_NAME, C.SOURCE_POSITIONS_NAME]
             label_names = []  # type: List[str]
             return mx.sym.Group(decoder_init_states), data_names, label_names
 
@@ -220,6 +223,9 @@ class InferenceModel(model.SockeyeModel):
                                layout=C.BATCH_MAJOR),
                 mx.io.DataDesc(name=C.SOURCE_GRAPHS_NAME, 
                                shape=(self.encoder_batch_size, bucket_key, bucket_key),
+                               layout=C.BATCH_MAJOR),
+                mx.io.DataDesc(name=C.SOURCE_WEIGHTS_NAME, 
+                               shape=(self.encoder_batch_size, bucket_key),
                                layout=C.BATCH_MAJOR),
                 mx.io.DataDesc(name=C.SOURCE_POSITIONS_NAME,
                                shape=(self.encoder_batch_size, bucket_key),
