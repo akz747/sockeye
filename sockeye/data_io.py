@@ -244,7 +244,7 @@ def get_training_data_iters(source: str, target: str, source_graphs:str,
                                           vocab_target[C.EOS_SYMBOL],
                                           C.PAD_ID,
                                           vocab_target[C.UNK_SYMBOL],
-                                          vocab_edge['d'],
+                                          vocab_edge['f'],
                                           bucket_batch_sizes=train_iter.bucket_batch_sizes,
                                           fill_up=fill_up)
 
@@ -802,7 +802,13 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
         new_src_graphs = np.array([np.zeros((bucket_size, bucket_size)) for sent in range(batch_size)])
         for i, graph in enumerate(data_src_graphs):
             for tup in graph:
+                #try:
                 new_src_graphs[i][tup[0]][tup[1]] = tup[2] + 1
+                #except:
+                #    print(tup)
+                #    print(new_src_graphs[i])
+                #    print(i)
+                #    raise
                 # Get the id for self label
                 # DONE EXPLICITLY FOR NOW
                 #if tup[0] == tup[1]:
