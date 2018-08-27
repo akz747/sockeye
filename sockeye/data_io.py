@@ -220,7 +220,7 @@ def get_training_data_iters(source: str, target: str, source_graphs:str,
                                             vocab_target[C.EOS_SYMBOL],
                                             C.PAD_ID,
                                             vocab_target[C.UNK_SYMBOL],
-                                            vocab_edge['d'],
+                                            vocab_edge['f'],
                                             bucket_batch_sizes=None,
                                             fill_up=fill_up)
 
