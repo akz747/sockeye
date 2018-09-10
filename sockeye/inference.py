@@ -727,8 +727,8 @@ class Translator:
                 #new_graph[0][tup[2]][tup[0]][tup[1]] = 1.0
                 new_graph[0][tup[0]][tup[1]] = tup[2] + 1
                 # Get the id for self label
-                if tup[0] == tup[1]:
-                    self_id = tup[2] + 1
+                #if tup[0] == tup[1]:
+                #    self_id = tup[2] + 1
         # Populate diagonal, need this because pad symbols need to have a self loop
         for j in range(bucket_key):
             new_graph[0][j][j] = self_id
@@ -751,7 +751,7 @@ class Translator:
         """
         ##############
         # !!!!!!!!!!
-        self.forward_id = 1
+        self.forward_id = 0
         ###############
         positions = np.ones((1, bucket_key)) * 1000
         adj = graph[0]

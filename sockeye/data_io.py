@@ -802,13 +802,14 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
         new_src_graphs = np.array([np.zeros((bucket_size, bucket_size)) for sent in range(batch_size)])
         for i, graph in enumerate(data_src_graphs):
             for tup in graph:
-                #try:
-                new_src_graphs[i][tup[0]][tup[1]] = tup[2] + 1
-                #except:
-                #    print(tup)
-                #    print(new_src_graphs[i])
-                #    print(i)
-                #    raise
+                try:
+                    new_src_graphs[i][tup[0]][tup[1]] = tup[2] + 1
+                except:
+                    print(tup)
+                    print(new_src_graphs[i])
+                    print(i)
+                    print(graph)
+                    raise
                 # Get the id for self label
                 # DONE EXPLICITLY FOR NOW
                 #if tup[0] == tup[1]:
