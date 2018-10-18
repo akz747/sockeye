@@ -22,8 +22,6 @@ python -m sockeye.train --source data/toy2/train.en.tok \
     --rnn-attention-num-hidden 18 \
     --grn-dropout 0.5 \
     --grn-norm \
-    --grn-positional \
-    --grn-pos-embed 12 \
     --skip-rnn
 #    --skip-rnn
 #    --weight-tying \

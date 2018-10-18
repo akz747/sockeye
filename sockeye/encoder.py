@@ -429,15 +429,15 @@ def get_gatedgrn_encoder(config: GatedGraphRecEncoderConfig,
 
 
         
-    if config.pos_embeddings:
+#    if config.pos_embeddings:
         #encoders.append(AddGraphSinCosPositionalEmbeddings(num_embed=config.num_embed,
         #                                                   prefix=C.SOURCE_GRAPH_POSITIONAL_EMBEDDING_PREFIX))
-        encoders.append(ConcatGraphLearnedPositionalEmbeddings(num_embed=config.pos_num_embed,
-                                                               max_seq_len=config.max_seq_len,
-                                                               dropout=config.embed_dropout,
-                                                               prefix=C.SOURCE_GRAPH_POSITIONAL_EMBEDDING_PREFIX))
+#        encoders.append(ConcatGraphLearnedPositionalEmbeddings(num_embed=config.pos_num_embed,
+#                                                               max_seq_len=config.max_seq_len,
+#                                                               dropout=config.embed_dropout,
+#                                                               prefix=C.SOURCE_GRAPH_POSITIONAL_EMBEDDING_PREFIX))
 
-    new_gatedgrn_config = grn.GatedGRNConfig(input_dim=config.num_embed + config.pos_num_embed,
+    new_gatedgrn_config = grn.GatedGRNConfig(input_dim=config.num_embed,# + config.pos_num_embed,
                                              output_dim=config.gatedgrn_config.output_dim,
                                              tensor_dim=config.gatedgrn_config.tensor_dim,
                                              num_layers=config.gatedgrn_config.num_layers,

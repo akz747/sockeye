@@ -561,18 +561,18 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
                            shape=(self.bucket_batch_sizes[-1].batch_size,
                                   self.default_bucket_key[0],
                                   self.default_bucket_key[0]),
-                           layout=C.BATCH_MAJOR),
-            mx.io.DataDesc(name=src_positions_name,
-                           shape=(self.bucket_batch_sizes[-1].batch_size,
-                                  self.default_bucket_key[0]),
                            layout=C.BATCH_MAJOR)]
+#            mx.io.DataDesc(name=src_positions_name,
+#                           shape=(self.bucket_batch_sizes[-1].batch_size,
+#                                  self.default_bucket_key[0]),
+#                           layout=C.BATCH_MAJOR)]
 
         self.provide_label = [
             mx.io.DataDesc(name=label_name,
                            shape=(self.bucket_batch_sizes[-1].batch_size, self.default_bucket_key[1]),
                            layout=C.BATCH_MAJOR)]
 
-        self.data_names = [self.source_data_name, self.target_data_name, self.src_graphs_name, self.src_positions_name]
+        self.data_names = [self.source_data_name, self.target_data_name, self.src_graphs_name]#, self.src_positions_name]
         self.label_names = [self.label_name]
         logger.info(self.data_names)
         logger.info(self.label_names)
@@ -597,7 +597,7 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
         #####
         # GCN
         self.nd_src_graphs = []
-        self.nd_src_positions = []
+        #self.nd_src_positions = []
 
         self.reset()
 
@@ -647,7 +647,7 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
             self.data_src_graphs[buck_idx].append(src_graph)
             # just fill empty lists here, these will be updated when
             # converting the data.
-            self.data_src_positions[buck_idx].append([])
+            #self.data_src_positions[buck_idx].append([])
             #####
 
         # Average number of non-padding elements in target sequence per bucket
@@ -747,13 +747,13 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
             #####
             # GCN
             self.data_src_graphs[i] = self._convert_to_adj_matrix(self.buckets[i][0], self.data_src_graphs[i])
-            self.data_src_positions[i] = self._get_graph_positions(self.buckets[i][0], self.data_src_graphs[i])
-            try:
-                max_dist = np.max(self.data_src_positions[i], axis=1)
-                for val in max_dist:
-                    max_dists[val] += 1
-            except ValueError:
-                max_dist = 0
+            #self.data_src_positions[i] = self._get_graph_positions(self.buckets[i][0], self.data_src_graphs[i])
+            #try:
+            #    max_dist = np.max(self.data_src_positions[i], axis=1)
+            #    for val in max_dist:
+            #        max_dists[val] += 1
+            #except ValueError:
+            #    max_dist = 0
             #logger.info(max_dist)
             #logger.info("SRC_METADATA SHAPE: " + str(self.data_src_metadata[i].shape))
             #####
@@ -779,13 +779,13 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
                     # GCN: we add an empty list as padding
                     self.data_src_graphs[i] = np.concatenate((self.data_src_graphs[i], self.data_src_graphs[i][random_indices, :, :]),
                                                              axis=0)
-                    self.data_src_positions[i] = np.concatenate((self.data_src_positions[i], self.data_src_positions[i][random_indices]),
-                                                                axis=0)
+                    #self.data_src_positions[i] = np.concatenate((self.data_src_positions[i], self.data_src_positions[i][random_indices]),
+#                                                                axis=0)
                     ####
                     #logger.info('Shapes after replication')
                     #logger.info(self.data_source[i].shape)
                     #logger.info(self.data_src_metadata[i].shape)
-        logger.info(max_dists)
+        #logger.info(max_dists)
                     
     def _convert_to_adj_matrix(self, bucket_size, data_src_graphs):
         """
@@ -901,7 +901,7 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
         self.nd_target.append(mx.nd.array(self.data_target[bucket].take(shuffled_indices, axis=0), dtype=self.dtype))
         self.nd_label.append(mx.nd.array(self.data_label[bucket].take(shuffled_indices, axis=0), dtype=self.dtype))
         self.nd_src_graphs.append(mx.nd.array(self.data_src_graphs[bucket].take(shuffled_indices, axis=0), dtype=self.dtype))
-        self.nd_src_positions.append(mx.nd.array(self.data_src_positions[bucket].take(shuffled_indices, axis=0), dtype=self.dtype))           
+        #self.nd_src_positions.append(mx.nd.array(self.data_src_positions[bucket].take(shuffled_indices, axis=0), dtype=self.dtype))           
 
     def iter_next(self) -> bool:
         """
@@ -923,8 +923,8 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
         source = self.nd_source[i][j:j + batch_size_seq]
         target = self.nd_target[i][j:j + batch_size_seq]
         src_graphs = self.nd_src_graphs[i][j:j + batch_size_seq]
-        src_positions = self.nd_src_positions[i][j:j + batch_size_seq]
-        data = [source, target, src_graphs, src_positions]
+        #src_positions = self.nd_src_positions[i][j:j + batch_size_seq]
+        data = [source, target, src_graphs]#, src_positions]
         label = [self.nd_label[i][j:j + batch_size_seq]]
 
         provide_data = [mx.io.DataDesc(name=n, shape=x.shape, layout=C.BATCH_MAJOR) for n, x in
