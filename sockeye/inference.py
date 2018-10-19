@@ -143,13 +143,13 @@ class InferenceModel(model.SockeyeModel):
         def sym_gen(source_seq_len: int):
             source = mx.sym.Variable(C.SOURCE_NAME)
             source_graphs = mx.sym.Variable(C.SOURCE_GRAPHS_NAME)
-            source_positions = mx.sym.Variable(C.SOURCE_POSITIONS_NAME)
+            #source_positions = mx.sym.Variable(C.SOURCE_POSITIONS_NAME)
             source_length = utils.compute_lengths(source)
 
             (source_encoded,
              source_encoded_length,
              source_encoded_seq_len) = self.encoder.encode(source, source_length, source_seq_len,
-                                                           metadata=(source_graphs, source_positions))
+                                                           metadata=(source_graphs,))# source_positions))
             # TODO(fhieber): Consider standardizing encoders to return batch-major data to avoid this line.
             source_encoded = mx.sym.swapaxes(source_encoded, dim1=0, dim2=1)
 
@@ -158,7 +158,7 @@ class InferenceModel(model.SockeyeModel):
                                                            source_encoded_length,
                                                            source_encoded_seq_len)
 
-            data_names = [C.SOURCE_NAME, C.SOURCE_GRAPHS_NAME, C.SOURCE_POSITIONS_NAME]
+            data_names = [C.SOURCE_NAME, C.SOURCE_GRAPHS_NAME]#, C.SOURCE_POSITIONS_NAME]
             label_names = []  # type: List[str]
             return mx.sym.Group(decoder_init_states), data_names, label_names
 
@@ -220,10 +220,10 @@ class InferenceModel(model.SockeyeModel):
                                layout=C.BATCH_MAJOR),
                 mx.io.DataDesc(name=C.SOURCE_GRAPHS_NAME, 
                                shape=(self.encoder_batch_size, bucket_key, bucket_key),
-                               layout=C.BATCH_MAJOR),
-                mx.io.DataDesc(name=C.SOURCE_POSITIONS_NAME,
-                               shape=(self.encoder_batch_size, bucket_key),
-                               layout=C.BATCH_MAJOR)]
+                               layout=C.BATCH_MAJOR)]#,
+    #mx.io.DataDesc(name=C.SOURCE_POSITIONS_NAME,
+    #                           shape=(self.encoder_batch_size, bucket_key),
+    #                           layout=C.BATCH_MAJOR)]
 
 
     def _get_decoder_data_shapes(self, bucket_key: Tuple[int, int]) -> List[mx.io.DataDesc]:
@@ -245,8 +245,8 @@ class InferenceModel(model.SockeyeModel):
     def run_encoder(self,
                     source: mx.nd.NDArray,
                     source_max_length: int,
-                    source_graph: mx.nd.NDArray,
-                    source_positions: mx.nd.NDArray) -> List[mx.nd.NDArray]:
+                    source_graph: mx.nd.NDArray) -> List[mx.nd.NDArray]:
+#                    source_positions: mx.nd.NDArray) -> List[mx.nd.NDArray]:
         """
         Runs forward pass of the encoder.
         Encodes source given source length and bucket key.
@@ -258,7 +258,7 @@ class InferenceModel(model.SockeyeModel):
         :param source_max_length: Bucket key.
         :return: Encoded source, source length, initial decoder hidden state, initial decoder hidden states.
         """
-        batch = mx.io.DataBatch(data=[source, source_graph, source_positions],
+        batch = mx.io.DataBatch(data=[source, source_graph],#, source_positions],
                                 label=None,
                                 bucket_key=source_max_length,
                                 provide_data=self._get_encoder_data_shapes(source_max_length))
@@ -733,8 +733,8 @@ class Translator:
         for j in range(bucket_key):
             new_graph[0][j][j] = self_id
 
-        positions = self._get_graph_positions(bucket_key, new_graph.asnumpy())
-        positions = mx.nd.array(positions)
+        #positions = self._get_graph_positions(bucket_key, new_graph.asnumpy())
+        #positions = mx.nd.array(positions)
         ########
         #logger.info(source)
         #logger.info(bucket_key)
@@ -742,7 +742,7 @@ class Translator:
         #logger.info(new_graph.asnumpy())
         #logger.info(positions.asnumpy())
 
-        return source, bucket_key, new_graph, positions
+        return source, bucket_key, new_graph#, positions
 
 
     def _get_graph_positions(self, bucket_key, graph):
@@ -828,8 +828,9 @@ class Translator:
     def translate_nd(self,
                      source: mx.nd.NDArray,
                      source_length: int,
-                     source_graph: mx.nd.NDArray,
-                     source_positions: mx.nd.NDArray) -> Translation:
+                     source_graph: mx.nd.NDArray) -> Translation:#,
+    #source_positions: mx.nd.NDArray)
+    #-> Translation:
         """
         Translates source of source_length, given a bucket_key.
 
@@ -838,12 +839,12 @@ class Translator:
 
         :return: Sequence of translated ids, attention matrix, length-normalized negative log probability.
         """
-        return self._get_best_from_beam(*self._beam_search(source, source_length, source_graph, source_positions))
+        return self._get_best_from_beam(*self._beam_search(source, source_length, source_graph))#, source_positions))
 
     def _encode(self, source: mx.nd.NDArray,
                 source_length: int,
-                source_graph: mx.nd.NDArray,
-                source_positions: mx.nd.NDArray) -> List[ModelState]:
+                source_graph: mx.nd.NDArray)  -> List[ModelState]:
+ #               source_positions: mx.nd.NDArray) -> List[ModelState]:
         """
         Returns a ModelState for each model representing the state of the model after encoding the source.
 
@@ -853,7 +854,8 @@ class Translator:
         :param source_positions: Input graph positions
         :return: List of ModelStates.
         """
-        return [ModelState(states=m.run_encoder(source, source_length, source_graph, source_positions)) for m in self.models]
+        return [ModelState(states=m.run_encoder(source, source_length, source_graph)) for m in self.models]
+        #return [ModelState(states=m.run_encoder(source, source_length, source_graph, source_positions)) for m in self.models]
 
     def _decode_step(self,
                      sequences: mx.nd.NDArray,
@@ -911,8 +913,8 @@ class Translator:
     def _beam_search(self,
                      source: mx.nd.NDArray,
                      source_length: int,
-                     source_graph: mx.nd.NDArray,
-                     source_positions: mx.nd.NDArray) -> Tuple[mx.nd.NDArray, mx.nd.NDArray, mx.nd.NDArray, mx.nd.NDArray]:
+                     source_graph: mx.nd.NDArray)  -> Tuple[mx.nd.NDArray, mx.nd.NDArray, mx.nd.NDArray, mx.nd.NDArray]:
+                     #source_positions: mx.nd.NDArray) -> Tuple[mx.nd.NDArray, mx.nd.NDArray, mx.nd.NDArray, mx.nd.NDArray]:
         """
         Translates a single sentence using beam search.
 
@@ -956,7 +958,7 @@ class Translator:
         self.pad_dist[:] = np.inf
 
         # (0) encode source sentence
-        model_states = self._encode(source, source_length, source_graph, source_positions)
+        model_states = self._encode(source, source_length, source_graph)#, source_positions)
 
         for t in range(1, max_output_length):
 
