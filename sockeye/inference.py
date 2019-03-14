@@ -720,12 +720,12 @@ class Translator:
         # GCN
         new_graph = mx.nd.zeros((1, bucket_key, bucket_key))
         # gaaaaaah!!!!
-        self_id = 3
+        self_id = C.SELF_ID
         for tup in graph:
             if (tup[0] < bucket_key) and (tup[1] < bucket_key):
                 # Stripping for graphs as well
                 #new_graph[0][tup[2]][tup[0]][tup[1]] = 1.0
-                new_graph[0][tup[0]][tup[1]] = tup[2] + 1
+                new_graph[0][tup[0]][tup[1]] = tup[2]
                 # Get the id for self label
                 #if tup[0] == tup[1]:
                 #    self_id = tup[2] + 1
@@ -751,14 +751,14 @@ class Translator:
         """
         ##############
         # !!!!!!!!!!
-        self.forward_id = 0
+        self.forward_id = C.FORWARD_ID
         ###############
         positions = np.ones((1, bucket_key)) * 1000
         adj = graph[0]
         dist = 0
         curr_node = self._find_root(adj)
         positions[0][curr_node] = dist # fill root node pos
-        forward_mask = np.ones_like(adj) * (self.forward_id + 1)
+        forward_mask = np.ones_like(adj) * (self.forward_id)
         forward_adj = (forward_mask == adj)
         # Start recursion over the adj matrix
         self._fill_pos(dist+1, curr_node, positions[0], forward_adj)

@@ -220,7 +220,7 @@ def get_training_data_iters(source: str, target: str, source_graphs:str,
                                             vocab_target[C.EOS_SYMBOL],
                                             C.PAD_ID,
                                             vocab_target[C.UNK_SYMBOL],
-                                            vocab_edge['f'],
+                                            C.FORWARD_ID,
                                             bucket_batch_sizes=None,
                                             fill_up=fill_up)
 
@@ -244,7 +244,7 @@ def get_training_data_iters(source: str, target: str, source_graphs:str,
                                           vocab_target[C.EOS_SYMBOL],
                                           C.PAD_ID,
                                           vocab_target[C.UNK_SYMBOL],
-                                          vocab_edge['f'],
+                                          C.FORWARD_ID,
                                           bucket_batch_sizes=train_iter.bucket_batch_sizes,
                                           fill_up=fill_up)
 
@@ -817,7 +817,7 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
                 #    self_id = tup[2] + 1
             # Populate diagonal, need this because pad symbols need to have a self loop
             # UPDATE/TODO: diagonals are implicit now
-            self_id = 3
+            self_id = C.SELF_ID
             #print(self_id)
             for j in range(bucket_size):
                 new_src_graphs[i][j][j] = self_id
@@ -836,7 +836,7 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
             positions[i][curr_node] = dist # fill root node pos
             #print(adj)
             #print(self.forward_id + 1)
-            forward_mask = np.ones_like(adj) * (self.forward_id + 1)
+            forward_mask = np.ones_like(adj) * (self.forward_id)
             forward_adj = (forward_mask == adj)
             # Start recursion over the adj matrix
             

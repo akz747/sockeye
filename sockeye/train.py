@@ -68,6 +68,28 @@ def _build_or_load_vocab(existing_vocab_path: Optional[str], data_paths: List[st
     return vocabulary
 
 
+def check_vocab_edge(vocab_edge: Dict) -> bool:
+    """
+    We do three checks here:
+    - None of the ids is 0: this is reserved for lack of edges.
+    - None of the ids is 1: this is reserved for self-loops
+      (added implicitly when building the adjacency matrix).
+    - The 'f' id is the same as C.FORWARD_ID. This is to ensure
+      that graph positions are calculated correctly.
+      (TODO: get positions offline as preprocessing, use the ggrn_weights
+      codebase for a way to add that. Solving this TODO will remove the need
+      for this check).
+    """
+    ids = vocab_edge.values()
+    if 0 in ids:
+        return False
+    if 1 in ids:
+        return False
+    if vocab_edge['f'] != C.FORWARD_ID:
+        return False
+    return True
+    
+
 def _list_to_tuple(v):
     """Convert v to a tuple if it is a list."""
     if isinstance(v, list):
@@ -722,7 +744,12 @@ def main():
         ###########
         # GCN
         # For now we assume graph vocab is built externally
+        # We also do a check on the vocab so it matches the constants
+        # TODO: this is ugly and should be done better
         vocab_edge = _build_or_load_vocab(args.edge_vocab, args.source_graphs, args.num_words, args.word_min_count)
+        if not check_vocab_edge(vocab_edge):
+            logger.error("Edge vocab does not follow check: no 0 and 1 allowed and 'f' should be %d" % C.FORWARD_ID)
+            sys.exit(1)
         vocab.vocab_to_json(vocab_edge, os.path.join(output_folder, C.VOCAB_MD_NAME) + C.JSON_SUFFIX)
         vocab_edge_size = len(vocab_edge)
         ###########
