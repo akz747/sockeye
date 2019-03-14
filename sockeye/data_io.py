@@ -796,6 +796,7 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
         This is because 0 is a valid vocab id but we want to use 0's
         to represent lack of edges instead. This means that the GCN code
         should account for this.
+        UPDATE: we will force 0 to not be present in edge vocab.
         """
         batch_size = len(data_src_graphs)
         #logger.info("BUCKET SIZE: %d", bucket_size)
@@ -803,7 +804,7 @@ class ParallelBucketSentenceIter(mx.io.DataIter):
         for i, graph in enumerate(data_src_graphs):
             for tup in graph:
                 try:
-                    new_src_graphs[i][tup[0]][tup[1]] = tup[2] + 1
+                    new_src_graphs[i][tup[0]][tup[1]] = tup[2]
                 except:
                     print(tup)
                     print(new_src_graphs[i])
